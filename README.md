@@ -2,7 +2,7 @@
 
 A responsive, installable personal finance web app built with React, TypeScript, Vite, Tailwind CSS v4, and Supabase.
 
-> Current phase: **Phase 2 — Core ledger complete and verified**. Accounts, categories, income/expense records, derived balances, and transaction history are implemented and verified against Supabase with two test users. Phase 1 foundation work is also complete.
+> Current phase: **Phase 2 — D-019 unified ledger redesign applied and verified**. One record screen creates Expense, Income, and Transfer rows; one headerless, day-grouped history shows signed totals and compact records. Migration `0005_unified_transactions.sql` is applied and live-verified; migrations `0001`–`0004` were verified live with two Supabase users.
 
 ## Prerequisites
 
@@ -35,6 +35,8 @@ A responsive, installable personal finance web app built with React, TypeScript,
    - Run `supabase/migrations/0001_profiles.sql`. This creates the `profiles` table, RLS policies, profile-creation trigger, and `updated_at` trigger.
    - Run `supabase/migrations/0002_profile_nickname.sql`. This adds the required `nickname` column, backfills existing rows, and updates the auth trigger.
    - Run `supabase/migrations/0003_core_ledger.sql`. This creates `accounts`, `categories`, and `transactions` with indexes, RLS policies, seed categories, and a backfill for existing profiles.
+   - Run `supabase/migrations/0004_transaction_time_and_transfers.sql`. This renames `transactions.occurred_on` to local `occurred_at` and creates the old `transfers` table with its indexes, RLS policy, and delete rules.
+   - Run `supabase/migrations/0005_unified_transactions.sql`. This extends `transactions` to all three types, migrates existing transfer rows into it, and drops the old `transfers` table.
 
 4. Configure Supabase Auth:
 

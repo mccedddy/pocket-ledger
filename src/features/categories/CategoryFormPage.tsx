@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { Category } from '../../data/categoryRepository'
-import type { LedgerType } from '../../data/database.types'
+import type { CategoryType } from '../../data/database.types'
 import { normalizeEntityName, validateEntityName } from '../../domain/validation'
 import { useAuth } from '../auth/authContext'
 import { Button } from '../../shared/Button'
@@ -53,7 +53,7 @@ function CategoryForm({ userId, existing }: { userId: string; existing?: Categor
   const update = useUpdateCategory(userId)
   const remove = useDeleteCategory(userId)
   const [name, setName] = useState(existing?.name ?? '')
-  const [type, setType] = useState<LedgerType>(existing?.type ?? 'expense')
+  const [type, setType] = useState<CategoryType>(existing?.type ?? 'expense')
   const [nameError, setNameError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 

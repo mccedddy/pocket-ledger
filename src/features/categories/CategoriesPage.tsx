@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { categoriesOfType, type Category } from '../../data/categoryRepository'
-import type { LedgerType } from '../../data/database.types'
+import type { CategoryType } from '../../data/database.types'
 import { useAuth } from '../auth/authContext'
 import { Button } from '../../shared/Button'
 import { Card } from '../../shared/Card'
@@ -41,7 +41,7 @@ export function CategoriesPage() {
     )
   }
 
-  const sections: { type: LedgerType; title: string }[] = [
+  const sections: { type: CategoryType; title: string }[] = [
     { type: 'expense', title: 'Expense categories' },
     { type: 'income', title: 'Income categories' },
   ]

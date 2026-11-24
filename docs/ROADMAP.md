@@ -1,7 +1,7 @@
 # Pocket Ledger — Roadmap
 
-> Last updated: 2026-11-24
-> Status: **Phase 1 and Phase 2 complete and verified.** Nickname, currency, and theme persistence, two-user RLS isolation, sign-out, and PWA asset checks pass. Phase 2 accounts, categories, records, history, derived balances, seeds, and RLS were verified live with two test users and in a production-build browser smoke test.
+> Last updated: 2026-11-25
+> Status: **D-019 approved; Phase 2 unified-ledger redesign applied and verified.** D-019 supersedes D-018's separate transfers table: all three types use one record screen and one headerless, day-grouped history. Migration `0005_unified_transactions.sql` is applied and live-verified.
 
 ## 1. How to use this roadmap
 
@@ -15,8 +15,8 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 | --- | --- | --- | --- |
 | 0 | Documentation and decisions | This document set | Complete |
 | 1 | Foundation | F-001, F-006, F-007, F-023 | Complete; migrations applied, sign-in/out and two-user RLS verified, PWA assets checked |
-| 2 | Core ledger (baseline) | F-002, F-003, F-004, F-005 | Complete; migration applied, seeds, RLS, balances, and CRUD verified |
-| 3 | Transaction usability | F-008, F-009, F-010, F-011 | Deferred |
+| 2 | Core ledger (baseline) | F-002, F-003, F-004, F-005, F-008 | D-019 redesign applied and verified; unified three-type ledger code, migration, and production-build smoke test complete |
+| 3 | Transaction usability | F-009, F-010, F-011 | Deferred |
 | 4 | Planning and insights | F-012, F-013, F-014 | Deferred |
 | 5 | Advanced features | F-016–F-021 | Deferred (F-015 out of scope) |
 | 6 | Optional offline support | F-022 | Deferred, open |
@@ -62,36 +62,42 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 
 ## 5. Phase 2 — Core ledger (baseline completion)
 
-**Scope:** F-002 accounts, F-003 categories, F-004 income/expense records, F-005 transaction history.
+**Scope:** F-002 accounts, F-003 categories, F-004 income/expense/transfer records, F-005 unified transaction history, plus editable local record time. F-008 is folded into F-004/F-005 (**D-019**).
 
-**Entry gates:** Phase 1 exit criteria were satisfied, including two-user RLS verification; the D-006 seed migration was verified during Phase 2; visual design follows D-005 and needed no further decision. Photos are out of scope per **D-014**.
+**Entry gates:** Phase 1 exit criteria were satisfied, including two-user RLS verification; the D-006 seed migration was verified during Phase 2; visual design follows D-005 and needed no further decision. Photos are out of scope per **D-014**. The extension first amended **D-001**/**D-009** with **D-018** (separate transfers table), then the owner approved **D-019**, which supersedes that design with a unified ledger.
 
 **Work items:**
 
 1. Add migrations for `accounts`, `categories`, `transactions`, indexes, and RLS (per [DATABASE.md](./DATABASE.md)).
 2. Build account list/create/edit/delete screens with derived balances per **D-011**.
 3. Build income/expense category list/create/edit/delete screens with type consistency.
-4. Build record editor with the guide's required and optional fields (F-004).
-5. Build chronological transaction history with empty/loading/error states (F-005).
-6. Add tests for domain helpers, form validation, and RLS isolation.
+4. Build one record editor for Expense, Income, and Transfer with type-specific fields (F-004, D-019).
+5. Build headerless chronological transaction history grouped by local day with signed day totals and empty/loading/error states (F-005, D-019).
+6. Add tests for domain helpers, three-type form validation, unified table rendering, and RLS isolation.
+7. *(Extension)* Replace `transactions.occurred_on` with editable local `occurred_at`; default to current local time.
+8. *(Extension, superseded)* D-018 added a separate transfers table; D-019 replaces it with transfer rows in `transactions`, migrates existing rows, and removes the separate table/routes.
 
 **Implementation notes (Phase 2):** `supabase/migrations/0003_core_ledger.sql` adds the three baseline tables, composite foreign keys, indexes, `for all` RLS policies, `updated_at` triggers, and `public.seed_categories(uuid)` used by both the signup trigger and a one-time backfill for Phase 1 profiles. Balances are derived client-side in `domain/balance.ts` from the cached transactions, so no balance column or SQL view exists. New modules: `features/accounts/`, `features/categories/`, a real `features/transactions/`, plus `domain/date.ts`, `domain/money.ts`, `domain/balance.ts` and per-table repositories/hooks. Deletes use confirmation plus database `on delete restrict`; category type is fixed on edit. Typecheck, lint, 35 tests, and the production build pass. Live verification with two test users passed 20 checks covering seeds, RLS, type enforcement, chronology, balances, edits, deletes, and restrict behavior; a production-build browser smoke test covered create account → create record → history → balance update.
+
+**Extension implementation notes:** `supabase/migrations/0004_transaction_time_and_transfers.sql` renamed `transactions.occurred_on` to `occurred_at timestamp` and added the `transfers` table with composite ownership FKs, restrict deletes, indexes, `updated_at` trigger, and `for all` RLS. `domain/date.ts` gained local datetime helpers and `domain/balance.ts` transfer deltas including fees. D-019 now moves that behavior into the unified `transactions` table, removes `features/transfers/` and `/transfers` routes, and adds `supabase/migrations/0005_unified_transactions.sql`.
 
 **Exit criteria:**
 
 - A signed-in user can create, edit, and delete accounts, categories, and income/expense records. *(Verified live and in the browser smoke test.)*
 - Required-field and category-type validation prevents invalid records. *(Verified by component tests and a rejected income/expense-category insert, status 409.)*
 - A saved record appears in history and in the relevant account's balance calculation (rule **D-011**). *(Verified live: 100 + 50.25 − 20.15 = 130.10; browser: 250 − 40 = 210.)*
-- A second user cannot read or modify the first user's rows. *(Verified on all three new tables: cross-user reads/updates/deletes affect no rows; inserts return 403.)*
-- No deferred feature (transfers, filters, budgets, stats, recurring, cards) has been implemented, and no photo/receipt UI or storage exists (**D-014**). *(Confirmed in code review.)*
+- A second user cannot read or modify the first user's rows. *(Verified on `profiles`, `accounts`, `categories`, `transactions`, and the former `transfers` table with two live users; the D-019 probe row was verified in `transactions` and removed.)*
+- No remaining deferred feature (search, filters, bookmarks, budgets, stats, recurring, cards) has been implemented, and no photo/receipt UI or storage exists (**D-014**). *(Confirmed in code review.)*
+- *(Extension criterion, verified)* A record's local date/time is editable and defaults to the current local time.
+- *(D-019 criteria, live verified)* Transfers require two distinct own accounts; all three types appear in one headerless, day-grouped history with signed totals and no source/destination columns; source balance includes the optional fee; the old `transfers` table is retired and its rows are preserved.
 
 ## 6. Phase 3 — Transaction usability (deferred)
 
-**Scope:** F-008 transfers, F-009 search, F-010 filters, F-011 bookmarks.
+**Scope:** F-009 search, F-010 filters, F-011 bookmarks. F-008 transfers are part of Phase 2 F-004/F-005 by **D-019**.
 
-**Entry gates:** Phase 2 complete; **D-001 must be amended** to include these features; database design for transfers approved (a new DB design point, not present in the baseline schema).
+**Entry gates:** Phase 2 complete. **D-001 must be amended again** before any of these remaining deferred features are built; the transfer-specific gate is satisfied because **D-019** approved the unified three-type ledger.
 
-**Notes:** The guide states transfers are between the user's own accounts, include optional fees, and do not appear in the transaction list; filters apply only to income/expense records; bookmarked entries use the current date when created. See [FEATURES.md](./FEATURES.md) §4 for source links.
+**Notes:** The guide states filters apply only to income/expense records (not transfers); bookmarked entries use the current date when created. See [FEATURES.md](./FEATURES.md) §4 for source links.
 
 **Exit criteria:** Each implemented feature has a feature ID, documented reference behavior, RLS-covered storage where applicable, and tests; the baseline history behavior is not broken.
 

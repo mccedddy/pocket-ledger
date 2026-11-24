@@ -1,7 +1,7 @@
 # Pocket Ledger — UI and Interaction Design
 
-> Last updated: 2026-11-24
-> Status: **Phase 1 and Phase 2 UI complete and verified.** Accounts, categories, record editor, and transaction history exist alongside auth and settings, and were smoke-tested in a production build with a live Supabase user.
+> Last updated: 2026-11-25
+> Status: **D-019 approved; migration `0005_unified_transactions.sql` applied and verified.** The record screen handles Expense, Income, and Transfer with type-specific fields; the history is headerless, grouped by local day with signed totals and compact rows. The separate `/transfers` routes are removed. The refined layout was smoke-tested in the production build.
 
 ## 1. Purpose and constraints
 
@@ -13,12 +13,13 @@ Applicable decisions:
 - **D-003** — one configurable currency per user, display-only formatting.
 - **D-004** — installable PWA only; no offline data UI.
 - **D-005** — rose-accented tokens, Inter, Tailwind CSS v4, manual light/dark theme with light default.
+- **D-019** — one record screen for Expense/Income/Transfer; one headerless day-grouped history with signed totals.
 
 Reference material for the overall structure is the [Home tab](https://help.realbyteapps.com/hc/en-us/articles/360046150874-Home-tab) and [How to add an income & expense](https://help.realbyteapps.com/hc/en-us/articles/360042701994-How-to-add-an-income-expense) articles in the Money Manager guide.
 
 ## 2. Proposed information architecture
 
-Baseline navigation (Phase 1 auth routes use React Router; later ledger routes remain `Proposed`):
+Baseline navigation (all routes are implemented; React Router):
 
 ```text
 / (signed out)
@@ -26,9 +27,9 @@ Baseline navigation (Phase 1 auth routes use React Router; later ledger routes r
 └── /sign-up                     F-001  Create account with nickname
 
 / (signed in)
-├── /transactions                F-005  transaction history (default landing screen)
-│   ├── /transactions/new        F-004  create income or expense
-│   └── /transactions/:id/edit   F-004  edit income or expense
+├── /transactions                F-005  unified transaction history (default landing screen)
+│   ├── /transactions/new        F-004  create expense, income, or transfer
+│   └── /transactions/:id/edit   F-004  edit expense, income, or transfer
 ├── /accounts                    F-002  account list and balances
 │   ├── /accounts/new            F-002  create account
 │   └── /accounts/:id/edit       F-002  edit/delete account
@@ -38,7 +39,7 @@ Baseline navigation (Phase 1 auth routes use React Router; later ledger routes r
 └── /settings                    F-006, F-023  currency and theme settings
 ```
 
-Phase 1 implemented `/sign-in`, `/sign-up`, a temporary `/transactions` placeholder, and `/settings`. Phase 2 replaced the placeholder with the real history and record routes and added all account and category routes listed above.
+Phase 1 implemented `/sign-in`, `/sign-up`, a temporary `/transactions` placeholder, and `/settings`. Phase 2 replaced the placeholder with the real history and record routes and added all account and category routes. D-009 made record time editable; D-019 folds transfer creation into `/transactions/new` and removes the `/transfers` routes.
 
 Notes:
 
@@ -52,8 +53,8 @@ Notes:
 | --- | --- | --- | --- |
 | Sign-in | F-001 | Email and password inputs, sign-in action, link to sign-up, authentication feedback. | `Decided` behavior (D-002, D-015) |
 | Sign-up | F-001 | Nickname (1–30 chars), email, password, confirm password, link to sign-in. | `Decided` behavior (D-015, D-016) |
-| Transaction history | F-005 | List of income/expense records with date, category, account, optional payee/note, signed amount; entry point to create a record. | `Proposed` layout; `Reference` data source |
-| Record editor | F-004 | Date, account, category, amount (required); payee and note (optional); save and delete actions for existing records. | `Reference` fields; `Proposed` layout |
+| Transaction history | F-005 | Headerless chronology grouped by local day. Each day starts with a date and signed income/expense totals shown as amounts only. Record rows have a fixed height and show only category, note, and signed amount; the account is secondary text under the note, and the transfer fee is secondary under the amount. Long note/account text is truncated rather than wrapped. Transfer rows show Category `Transfer`. Record time is not displayed in the history. Clicking or keyboard-activating a row opens that record in the editor; there are no table action buttons. Entry point to create a record. | `Proposed` layout; `Reference` data source |
+| Record editor | F-004 | Type selector (Expense, Income, Transfer) plus shared date/time, amount, and note. Income/expense add account, category, and optional payee; transfer adds source account, destination account, and optional fee. Save and delete actions for existing records. | `Reference` fields; `Proposed` layout (D-019) |
 | Account list | F-002 | Accounts with derived balances and links to add/edit. | `Proposed` layout; `Reference` concept |
 | Account editor | F-002 | Name and initial amount; edit and delete actions. | `Reference` fields (guide: name and amount); `Proposed` layout |
 | Category list | F-003 | Separate income and expense category lists. New profiles show the eight seeded categories from D-006: expense — Food, Transport, Wants, Rent, Bills, Necessities; income — Salary, Bonus. | `Reference` concept; `Proposed` layout |
@@ -66,16 +67,17 @@ The reference app's "continue" button for consecutive entries and its daily memo
 
 | Area | Rule | Basis |
 | --- | --- | --- |
-| Required fields | Record editor blocks save without account, category, and amount (guide-mandatory). Requiring a date and `amount > 0` are `Proposed` rules; date handling follows D-009. | `Reference` + `Proposed` (F-004) |
+| Required fields | The record editor blocks save without a valid local date/time and positive amount for every type. Income/expense additionally require an account and category; transfer requires two distinct own accounts and a non-negative fee. | `Reference` + `Proposed` (F-004), `Decided` (D-019) |
 | Nickname | Sign-up requires a 1–30 character nickname; Settings can change it but cannot set it to blank. No header display in this pass. | `Decided` (D-016) |
-| Type/category consistency | Income records offer income categories; expense records offer expense categories. | Derived from the guide's separate income/expense categories |
+| Type/category consistency | Income records offer income categories; expense records offer expense categories; transfer has no category field. Switching type clears incompatible fields. | Derived from the guide plus `Decided` (D-019) |
 | Currency display | All money uses the profile's single currency and locale formatting; changing it does not mutate stored values. | `Decided` (D-003) |
 | Destructive actions | Confirmation before delete, with accessible cancel/confirm labels. | `Proposed` (security/usability convention, not specified by the guide) |
 | Validation feedback | Field-level errors for missing/invalid required values; form-level error on save failure. | `Proposed` |
 | Async states | Loading, empty, and error states for every data list; empty states invite the first create action. | `Proposed` |
 | Auth states | Unauthenticated users are routed to sign-in; expired sessions prompt sign-in again without discarding unsaved input silently. | `Proposed` alongside `Decided` D-002 |
-| Date input | Transaction date is a calendar-day value interpreted in the user's local timezone; local calendar boundaries apply. | `Decided` (D-009) |
-| Record grouping/ordering | Chronological ordering, newest first; grouping by local calendar day is optional. | `Proposed` |
+| Date/time input | The record editor uses a local `datetime-local` input for all three types, defaulting to the current local time; no timezone conversion is applied. Grouping/ordering use the user's local calendar day from that timestamp. | `Decided` (amended D-009) |
+| Record grouping/ordering | Chronological ordering by `occurred_at`, newest first; the unified history is grouped by local calendar day using a day-summary row, not a heading. | `Proposed`, `Decided` (D-019) |
+| Record display | Expense/income: the account appears as secondary text under the note, with the payee when provided. Transfer: Category is `Transfer`, the account line is `source → destination`, the amount stays `−amount`, and the optional fee is secondary under the amount. Notes remain the primary note text; record time is not shown in the history. Record rows use a uniform fixed height with truncated note/account text. Rows are clickable/focusable and open the record editor; deletion stays inside that editor. | `Decided` (D-019) |
 | Theme preference | Manual light/dark choice in Settings; default light; persisted in profile and applied before first paint. | `Decided` (D-005, F-023) |
 
 ## 5. Responsive behavior
@@ -139,7 +141,7 @@ Do not use raw palette classes (for example `text-rose-600`) in feature code; us
 | --- | --- |
 | Button | Primary: filled `--color-primary`. Secondary: transparent with `--color-border`. Ghost: text-only. Destructive: filled `--color-expense`. Sizes: 32/40/44px height. States: hover, focus-visible, disabled (reduced opacity, no pointer), loading (spinner plus label). |
 | Input / Select / Textarea | 40px control height, full width, 1px border, label above, 12px helper text. Error state uses `--color-expense` border plus message; focus uses the focus ring. |
-| Segmented control | Income/expense selector with text labels; active segment uses `--color-primary-soft` background and `--color-primary` text. Never rely on color alone. |
+| Segmented control | Expense/Income/Transfer selector with text labels; active segment uses `--color-primary-soft` background and `--color-primary` text. Never rely on color alone. |
 | Card / list row | Raised surface, 12px radius, 1px border. Row anatomy: leading category/account text, muted date and payee, trailing tabular amount with sign and semantic color. |
 | Badge | Pill shape with soft semantic background; used for record type and status. |
 | Dialog / bottom sheet | Centered dialog on desktop, bottom sheet on mobile; backdrop, Escape/backdrop close, focus trapped and restored. |
@@ -180,10 +182,10 @@ Any UI that promises offline access must be rejected until **D-004** is changed.
 
 ## 9. Deferred UI surface
 
-The following are documented in the guide but must not be built in the baseline: transfer form (F-008), search screen (F-009), filter panel (F-010), bookmark list (F-011), budget settings and progress bars (F-012), charts (F-013), calendar/weekly/monthly/summary views (F-014), note UI (F-016), repeat/installment controls (F-017), card billing fields and payment flow (F-018), account hide/order/group/exclude controls (F-019), and subcategory management (F-020). Photo/receipt UI (F-015) is out of product scope entirely per **D-014**, not merely deferred.
+The following are documented in the guide but must not be built in the baseline: search screen (F-009), filter panel (F-010), bookmark list (F-011), budget settings and progress bars (F-012), charts (F-013), calendar/weekly/monthly/summary views (F-014), note UI (F-016), repeat/installment controls (F-017), card billing fields and payment flow (F-018), account hide/order/group/exclude controls (F-019), and subcategory management (F-020). Transfer entry (F-008) is now part of the record editor per **D-019**. Photo/receipt UI (F-015) is out of product scope entirely per **D-014**, not merely deferred.
 
 ## 10. Open questions and AI handoff
 
-There are no open UI questions for the baseline. Resolved: Q-004 by **D-005** (palette is provisional), Q-002 by **D-009** (local calendar dates), Q-007 by **D-010** (hard delete with confirmation), Q-008 by **D-011** (derived balances). Auth UI is fixed by **D-015**, nickname editing by **D-016**, and PHP currency support with USD default by **D-017**.
+There are no open UI questions for the baseline. Resolved: Q-004 by **D-005** (palette is provisional), Q-002 by amended **D-009** (local date and time), Q-007 by **D-010** (hard delete with confirmation), Q-008 by amended **D-011** (derived balances including transfers). Auth UI is fixed by **D-015**, nickname editing by **D-016**, PHP currency support with USD default by **D-017**, and the unified three-type record screen/table by **D-019**.
 
 When implementing a baseline screen: keep the route and component names in sync with this document and [FEATURES.md](./FEATURES.md), use the D-005 design tokens, and do not introduce a screen for a deferred feature.

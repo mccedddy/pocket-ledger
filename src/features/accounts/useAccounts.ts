@@ -7,7 +7,7 @@ import {
   updateAccount,
   type AccountInput,
 } from '../../data/accountRepository'
-import { calculateBalance, type BalanceEntry } from '../../domain/balance'
+import { balanceEntriesForTransaction, calculateBalance, type BalanceEntry } from '../../domain/balance'
 import { useTransactions } from '../transactions/useTransactions'
 
 export function useAccounts(userId: string) {
@@ -43,17 +43,22 @@ export function useDeleteAccount(userId: string) {
   })
 }
 
-/** D-011: derive balances from the fetched records; nothing is stored. */
-export function useAccountBalances(userId: string, accounts: readonly { id: string; initial_amount: number }[] | undefined) {
+/** D-011 (amended): derive balances from unified transactions; nothing is stored. */
+export function useAccountBalances(
+  userId: string,
+  accounts: readonly { id: string; initial_amount: number }[] | undefined,
+) {
   const transactions = useTransactions(userId)
 
   const balances = new Map<string, number>()
   if (accounts) {
     const byAccount = new Map<string, BalanceEntry[]>()
     for (const transaction of transactions.data ?? []) {
-      const entries = byAccount.get(transaction.account_id) ?? []
-      entries.push({ type: transaction.type, amount: transaction.amount })
-      byAccount.set(transaction.account_id, entries)
+      for (const { accountId, entry } of balanceEntriesForTransaction(transaction)) {
+        const entries = byAccount.get(accountId) ?? []
+        entries.push(entry)
+        byAccount.set(accountId, entries)
+      }
     }
     for (const account of accounts) {
       balances.set(
@@ -67,6 +72,8 @@ export function useAccountBalances(userId: string, accounts: readonly { id: stri
     balances,
     isLoading: transactions.isLoading,
     isError: transactions.isError,
-    refetch: () => void transactions.refetch(),
+    refetch: () => {
+      void transactions.refetch()
+    },
   }
 }

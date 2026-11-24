@@ -3,12 +3,15 @@ import { getSupabaseClient } from './supabase'
 
 export type Transaction = Database['public']['Tables']['transactions']['Row']
 
+/** One input shape for all three ledger types; unused fields are null/zero. */
 export type TransactionInput = {
   type: LedgerType
-  occurred_on: string
+  occurred_at: string
   account_id: string
-  category_id: string
+  to_account_id: string | null
+  category_id: string | null
   amount: number
+  fee_amount: number
   payee: string | null
   note: string | null
 }
@@ -20,7 +23,7 @@ export async function fetchTransactions(userId: string): Promise<Transaction[]> 
     .from('transactions')
     .select('*')
     .eq('user_id', userId)
-    .order('occurred_on', { ascending: false })
+    .order('occurred_at', { ascending: false })
     .order('created_at', { ascending: false })
 
   if (error) throw error

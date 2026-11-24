@@ -1,7 +1,7 @@
 # Pocket Ledger — Feature Inventory
 
 > Last updated: 2026-11-24
-> Status: **Phase 1 features complete and verified; Phase 2 features F-002–F-005 complete and verified.** Seed categories, RLS isolation, type consistency, derived balances, and CRUD were verified live with two test users. Deferred items are still only requirements.
+> Status: **D-019 approved; migration `0005_unified_transactions.sql` applied and verified.** F-004 covers Expense, Income, and Transfer in one record screen; F-005 shows all three types in one headerless, day-grouped history with signed day totals. F-008's separate-table design is superseded. The refined layout was smoke-tested in the production build.
 
 ## 1. Scope
 
@@ -50,32 +50,47 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 - **Decisions applied:** D-010 (hard delete; cannot delete a category still used by records).
 - **Open questions:** None.
 
-### F-004 — Income and expense records
+### F-004 — Income, expense, and transfer records
 
 - **Status:** `Reference` — core of the baseline.
 - **Reference:** [How to add an income & expense](https://help.realbyteapps.com/hc/en-us/articles/360042701994-How-to-add-an-income-expense).
 - **Reference behavior:**
-  - Entry fields are date, account, category, and amount.
+  - Entry fields are date, account, category, and amount. Pocket Ledger additionally supports an editable local time, defaulting to the current local time (D-009), and a third Transfer type that replaces category/payee with a destination account and optional fee (D-019).
   - Account, category, and amount are mandatory.
   - Seller/retailer/store/recipient (payee) and note are optional; the guide says a payee is auto-filled if skipped.
   - The reference app offers a "continue" button for consecutive entries and supports attaching pictures; neither is in Pocket Ledger (photos are out of scope per D-014; continue-entry UX is `Proposed` only and must not be assumed).
   - Saved records can be reviewed in the transaction tab and in the accounts tab.
   - The guide explicitly calls account, category, and amount mandatory; it lists date as an entry field. Requiring a date and requiring `amount > 0` are `Proposed` integrity rules, not explicit guide statements.
-- **Baseline behavior:** Create, edit, and delete income/expense records with the required fields above. Optional payee and note are supported. No photos, no recurring metadata, and no transfer type.
+- **Baseline behavior:** One editor creates, edits, and deletes all three types. Income/expense fields: date/time, account, category, amount, optional payee and note. Transfer fields: date/time, source account, destination account, amount, optional fee and note; no category or payee. Switching type clears incompatible fields. No photos and no recurring metadata.
 - **Acceptance criteria:**
-  - Saving without account, category, or amount is rejected (guide-derived); date and amount-positivity validation follow the `Proposed` rules above and D-009 (local calendar date).
-  - A saved record appears in the transaction history (F-005).
-  - A record's type (`income`/`expense`) matches its category type.
-- **Decisions applied:** D-008 (`numeric(14,2)`), D-009 (local calendar date), D-010 (hard delete), D-011 (derived balance).
+  - Saving requires a valid local date/time and positive amount for every type; income/expense additionally require an account and matching-type category; transfers require two distinct own accounts and a non-negative fee.
+  - A new record's time defaults to the current local time and can be changed when creating or editing.
+  - A saved record of any type appears in the transaction history (F-005).
+  - An income/expense record's type matches its category type; a transfer has no category and shows source → destination.
+- **Decisions applied:** D-008 (`numeric(14,2)`), D-009 (amended: local date and time), D-010 (hard delete), D-011 (derived balance), D-019 (unified ledger).
 - **Open questions:** None.
 
 ### F-005 — Transaction history
 
 - **Status:** `Reference` (review of records) with a deliberately minimal baseline presentation.
 - **Reference:** [Home tab](https://help.realbyteapps.com/hc/en-us/articles/360046150874-Home-tab) and the review section of [How to add an income & expense](https://help.realbyteapps.com/hc/en-us/articles/360042701994-How-to-add-an-income-expense).
-- **Baseline behavior:** A chronological list of the signed-in user's income and expense records, showing date, category, account, payee/note if present, and signed amount. Date grouping is `Proposed` and follows D-009 (user's local calendar day).
+- **Baseline behavior:** One headerless chronology of the signed-in user's Expense, Income, and Transfer rows, grouped by local calendar day (D-009). Each day starts with a summary row: the local date plus the signed income total and signed expense total for that day, shown as amounts only with no `Income`/`Expense` labels. Transfers are excluded from both totals. Each record row has a fixed height and shows only category, note, and signed amount; the account appears as secondary text under the note, and the optional transfer fee appears as secondary text under the amount. Long note/account text is truncated rather than wrapped. Transfer rows show Category `Transfer` and `source → destination` as the account line. Record time is not displayed in the history. Clicking or keyboard-activating a row opens that record in the editor; there are no table action buttons, and deletion remains inside the editor. Transfers are no longer a separate view (D-019).
 - **Not in baseline:** calendar, weekly, monthly, and summary review views (F-014); search (F-009); filters (F-010).
-- **Decisions applied:** D-009 (date semantics), D-005 (design tokens in [UI.md](./UI.md) §6).
+- **Decisions applied:** D-009 (amended local date/time semantics), D-005 (design tokens in [UI.md](./UI.md) §6), D-019 (unified headerless history, day totals, and row anatomy).
+- **Open questions:** None.
+
+### F-008 — Transfers between own accounts *(folded into F-004/F-005 by D-019)*
+
+- **Status:** `Superseded (D-019)` — no separate screen or table; transfer behavior is implemented inside F-004/F-005.
+- **Reference:** [How to record a transfer](https://help.realbyteapps.com/hc/en-us/articles/360042702534-How-to-record-a-transfer).
+- **Reference behavior:** a transfer is between the user's own accounts; "From", "To", and amount are required; an optional fee is recorded as an expense from the source account; transfers are also used for cash withdrawals, credit card payments, savings, time deposits, insurance, and loans. Payments to or from other people are income/expense, not transfers.
+- **Baseline behavior:** A `transfer` row in the unified `transactions` table with source account, destination account, amount, optional fee, editable local `occurred_at`, and optional note. The two accounts must differ. Transfers appear in the same headerless history as income/expense rows, with Category `Transfer`, `source → destination` as secondary account text, and the fee under the amount.
+- **Acceptance criteria:**
+  - A transfer requires two distinct own accounts and an amount greater than zero.
+  - An optional fee is treated as an expense from the source account: source balance decreases by `amount + fee`, destination increases by `amount`.
+  - Editing or deleting a transfer immediately updates both affected account balances.
+  - A transfer appears in the unified transaction table, not a separate view.
+- **Decisions applied:** D-001 (amended scope), D-008, D-009, D-010, D-011 (amended), D-019.
 - **Open questions:** None.
 
 ### F-006 — Single configurable currency
@@ -119,12 +134,12 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 | F-001 | User authentication and data ownership | Decided (baseline prerequisite) | Phase 1 |
 | F-002 | Accounts: create, edit, delete, list | Baseline | Phase 2 |
 | F-003 | Income/expense categories | Baseline | Phase 2 |
-| F-004 | Income and expense records | Baseline | Phase 2 |
+| F-004 | Income, expense, and transfer records | Baseline (D-019) | Phase 2 |
 | F-005 | Transaction history | Baseline | Phase 2 |
 | F-006 | Single configurable currency | Baseline | Phase 1 |
 | F-007 | PWA installability | Baseline | Phase 1 |
 | F-023 | Theme preference setting | Baseline | Phase 1 |
-| F-008 | Transfers between own accounts | Deferred | Phase 3 |
+| F-008 | Transfers between own accounts | Folded into F-004/F-005 (D-019) | Phase 2 (unified ledger) |
 | F-009 | Transaction search | Deferred | Phase 3 |
 | F-010 | Filters | Deferred | Phase 3 |
 | F-011 | Bookmarks | Deferred | Phase 3 |
@@ -143,12 +158,6 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 ## 4. Deferred features (do not implement in the baseline)
 
 Each entry records the documented reference behavior so a later session does not have to re-research it. None of these are requirements for the first release.
-
-### F-008 — Transfers between own accounts
-
-- **Reference:** [How to record a transfer](https://help.realbyteapps.com/hc/en-us/articles/360042702534-How-to-record-a-transfer).
-- Documented behavior: a transfer is between the user's own accounts; "From", "To", and amount are required; an optional fee is recorded as an expense from the source account; transfers do not appear in the transaction list; transfers are also used for cash withdrawals, credit card payments, savings, time deposits, insurance, and loans. Payments to or from other people are income/expense, not transfers.
-- Do not add a `transfer` transaction type or transfer UI to the baseline.
 
 ### F-009 — Transaction search
 

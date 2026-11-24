@@ -1,7 +1,8 @@
-/** Hand-maintained types for the Phase 1 + Phase 2 schema. */
+/** Hand-maintained types for the Phase 2 schema with the D-019 unified ledger. */
 
 export type ThemeValue = 'light' | 'dark'
-export type LedgerType = 'income' | 'expense'
+export type CategoryType = 'income' | 'expense'
+export type LedgerType = 'income' | 'expense' | 'transfer'
 
 export interface Database {
   public: {
@@ -63,7 +64,7 @@ export interface Database {
           id: string
           user_id: string
           name: string
-          type: LedgerType
+          type: CategoryType
           sort_order: number
           created_at: string
           updated_at: string
@@ -72,14 +73,14 @@ export interface Database {
           id?: string
           user_id: string
           name: string
-          type: LedgerType
+          type: CategoryType
           sort_order?: number
           created_at?: string
           updated_at?: string
         }
         Update: {
           name?: string
-          type?: LedgerType
+          type?: CategoryType
           sort_order?: number
           updated_at?: string
         }
@@ -90,10 +91,12 @@ export interface Database {
           id: string
           user_id: string
           type: LedgerType
-          occurred_on: string
+          occurred_at: string
           account_id: string
-          category_id: string
+          to_account_id: string | null
+          category_id: string | null
           amount: number
+          fee_amount: number
           payee: string | null
           note: string | null
           created_at: string
@@ -103,10 +106,12 @@ export interface Database {
           id?: string
           user_id: string
           type: LedgerType
-          occurred_on: string
+          occurred_at: string
           account_id: string
-          category_id: string
+          to_account_id?: string | null
+          category_id?: string | null
           amount: number
+          fee_amount?: number
           payee?: string | null
           note?: string | null
           created_at?: string
@@ -114,10 +119,12 @@ export interface Database {
         }
         Update: {
           type?: LedgerType
-          occurred_on?: string
+          occurred_at?: string
           account_id?: string
-          category_id?: string
+          to_account_id?: string | null
+          category_id?: string | null
           amount?: number
+          fee_amount?: number
           payee?: string | null
           note?: string | null
           updated_at?: string

@@ -1,7 +1,7 @@
 # Pocket Ledger — Architecture
 
-> Last updated: 2026-11-24
-> Status: **Phase 1 and Phase 2 complete and verified.** The structure below is the current baseline, including the Phase 2 ledger modules and applied migration.
+> Last updated: 2026-11-25
+> Status: **D-019 approved; migration `0005_unified_transactions.sql` applied and verified.** One `transactions` table holds Expense, Income, and Transfer rows; the record screen switches fields by type and the history is headerless, grouped by local day with signed totals. The production build was smoke-tested in the browser.
 
 ## 1. Purpose and current state
 
@@ -23,14 +23,15 @@ All statements are marked using the labels in [PRODUCT.md](./PRODUCT.md) §2.
 | Feature scope | Strict minimum baseline (now includes theme setting) | **D-001** |
 | Design system | Rose-accented tokens, Inter, Tailwind CSS v4, manual light/dark with light default | **D-005** |
 | Money | `numeric(14,2)`; formatting/rounding in `domain/` | **D-008** |
-| Dates | Calendar `date`, user-local timezone and boundaries | **D-009** |
-| Deletes/balances | Hard delete with restrict; derived opening-balance rule | **D-010**, **D-011** |
+| Dates | Editable local date/time (`occurred_at timestamp`), no timezone conversion | amended **D-009** |
+| Deletes/balances | Hard delete with restrict; derived balance including transfers and fees | **D-010**, amended **D-011**, **D-019** |
 | State | TanStack Query for server data, local React state for forms | **D-012** |
 | CI | PR previews plus `main` auto-deploy when Vercel exists | **D-013** |
 | Photos | No photo/receipt attachments anywhere in the product | **D-014** |
 | Auth mode | Email + password; confirmation off; no magic links or callback route | **D-015** |
 | Nickname | Required 1–30 characters at registration, editable in Settings, stored on `profiles` | **D-016** |
 | Currency list | `PHP` supported; `USD` remains default; no conversion | **D-017** |
+| Ledger | One table for Expense, Income, and Transfer; no separate transfer module or route | **D-019** |
 
 ## 3. Proposed system context
 
@@ -59,9 +60,9 @@ src/
   features/
     auth/              # SignInPage, SignUpPage, AuthProvider, session hook, error helpers
     settings/          # SettingsPage and profile query/mutation hooks
-    transactions/      # history, record editor, and query hooks (F-004/F-005)
+    transactions/      # unified history, record editor, and query hooks (F-004/F-005)
   domain/              # pure helpers; currency.ts and validation.ts implemented in Phase 1
-  data/                # Supabase client, hand-maintained DB types, profile repository
+  data/                # Supabase client, hand-maintained DB types, repositories
   shared/              # Button, Field, Input, Select, Card, PageHeader, FullPageState
   test/                # Vitest setup
 public/                # icons, favicon, static PWA assets
@@ -69,7 +70,7 @@ supabase/migrations/   # 0001_profiles.sql and 0002_profile_nickname.sql applied
 scripts/               # icon generation helper (not part of the npm build)
 ```
 
-Phase 2 added `features/accounts/`, `features/categories/`, the real `features/transactions/` screens, and `supabase/migrations/0003_core_ledger.sql`. Deferred features get their own `features/<name>/` module only when approved.
+Phase 2 added `features/accounts/`, `features/categories/`, the real `features/transactions/` screens, and `supabase/migrations/0003_core_ledger.sql`. D-009/D-018 added editable record time and a temporary `features/transfers/` module with `0004_transaction_time_and_transfers.sql`. D-019 removes that module and routes and folds all behavior into `features/transactions/` with `supabase/migrations/0005_unified_transactions.sql`. Deferred features get their own `features/<name>/` module only when approved.
 
 ## 5. Layer responsibilities
 
@@ -84,15 +85,15 @@ Phase 2 added `features/accounts/`, `features/categories/`, the real `features/t
 
 - Pure functions only: currency formatting (**D-003**), money arithmetic (**D-008**), date handling (**D-009**), and balance derivation (**D-011**).
 - No direct database or React dependencies, so these rules can be unit-tested.
-- Phase 1 implemented `domain/currency.ts`; Phase 2 added `date.ts`, `money.ts`, and `balance.ts`.
-- Do not implement transfer, budget, installment, or card-cycle math in the baseline.
+- Phase 1 implemented `domain/currency.ts`; Phase 2 added `date.ts`, `money.ts`, and `balance.ts`. `validation.ts` now covers all three transaction types.
+- Transfer math belongs in the unified balance/validation helpers, not a feature module. Budget, installment, and card-cycle math remain out of the baseline.
 
 ### Data access (`data/`)
 
 - Single configured Supabase client per app instance.
 - Typed queries scoped to the signed-in user; RLS is the security boundary, not client filtering.
 - Generate or maintain TypeScript database types alongside migrations.
-- Balance computation may be exposed through a database view/RPC or computed in the data layer; the choice is `Proposed` and must respect **D-011**.
+- Balance computation is client-side in `domain/balance.ts` from cached rows in the single `transactions` query and cached by TanStack Query; no SQL view/RPC is used. This respects **D-011** and remains true after **D-019**.
 
 ### Shared UI (`shared/`)
 
@@ -110,7 +111,7 @@ Phase 2 added `features/accounts/`, `features/categories/`, the real `features/t
 
 - **D-012**: TanStack Query for server data (caching, loading/error state, invalidation after mutations) plus local React state for form inputs.
 - Do not add a global store solely for baseline server data; the data-fetching choice is settled.
-- Mutating a record must refresh affected account balances and the transaction history view; the balance rule is **D-011**.
+- Mutating any transaction type must refresh account balances and the unified history; the balance rule is amended **D-011**, including transfer fees per **D-019**. All three types share one query cache key and one history table.
 
 ## 7. Authentication and security
 
@@ -143,22 +144,23 @@ Per **D-007**, the Supabase project exists, is named `pocket-ledger`, and is hos
 
 ## 10. Testing strategy
 
-Vitest and Testing Library are installed. Current coverage:
+Vitest and Testing Library are installed. Current coverage (48 tests passing):
 
-- **Unit tests** for `domain/currency.ts`, `domain/validation.ts`, `domain/money.ts`, `domain/date.ts`, and `domain/balance.ts`.
-- **Component tests** for the shared `Button` (`src/shared/Button.test.tsx`), the sign-in/sign-up forms (`src/features/auth/authPages.test.tsx`), and Settings nickname editing (`src/features/settings/SettingsPage.test.tsx`), including nickname validation and mutation arguments, and AppShell sign-out (`src/app/AppShell.test.tsx`). Phase 2 adds component tests for the Accounts list empty/error/balance states (`src/features/accounts/AccountsPage.test.tsx`) and record-form validation and type-filtered categories (`src/features/transactions/TransactionFormPage.test.tsx`).
+- **Unit tests** for `domain/currency.ts`, `domain/validation.ts`, `domain/money.ts`, `domain/date.ts`, and `domain/balance.ts`, covering all three transaction types.
+- **Component tests** for the shared `Button` (`src/shared/Button.test.tsx`), the sign-in/sign-up forms (`src/features/auth/authPages.test.tsx`), Settings nickname editing (`src/features/settings/SettingsPage.test.tsx`), AppShell sign-out (`src/app/AppShell.test.tsx`), the Accounts list empty/error/balance states (`src/features/accounts/AccountsPage.test.tsx`), the unified record form with dynamic fields and mutation arguments for Expense/Income/Transfer (`src/features/transactions/TransactionFormPage.test.tsx`), and the headerless unified history with day totals, row anatomy, transfer arrows, local-day grouping, and row navigation to the editor (`src/features/transactions/TransactionsPage.test.tsx`).
 
-Still to add as features land:
+Verification status:
 
-- Automated end-to-end tests for baseline flows: sign up with nickname, sign in, sign out, create account, create category, add income/expense, verify history and balance, edit/delete, change currency.
-- Supabase RLS verification with distinct test users (completed: anonymous read returned `200 []`; two-user isolation passed read, update, and insert checks on `profiles`, `accounts`, `categories`, and `transactions`).
+- Automated end-to-end tests for baseline flows are still not added; sign up with nickname, sign in, sign out, create account, create category, add income/expense, verify history and balance, edit/delete, and change currency were instead verified manually/live.
+- Supabase RLS verification with distinct test users (completed: anonymous read returned `200 []`; two-user isolation passed read, update, insert, and delete checks on `profiles`, `accounts`, `categories`, `transactions`, and the now-retired `transfers` table).
 - Live Phase 2 verification (completed): D-006 seeds for both users, category-type enforcement, derived balance D-011, chronology, restrict deletes, and a production-build browser smoke test of create account → create record → history → balance update.
+- Extension verification (completed after `0004`): editable local date/time, transfer CRUD, `transfers` RLS, fee-as-expense balance math, distinct-account/amount/fee constraints, and restrict deletes. 19 live API checks passed.
+- D-019 verification (completed): live REST checks confirmed the migrated transfer row in `transactions` with its amount and fee, and that `transfers` is retired (404); the probe data was removed. A production-build browser smoke test confirmed headerless day totals, row anatomy, the transfer arrow, and fee placement. Subsequent UI refinement set transfer Category to `Transfer`, removed record time from the history, replaced table action buttons with clickable/focusable rows that open the editor, and fixed record-row height with truncated note/account text; deletion remains in the editor. Three-type form behavior remains covered by component tests.
 
 ## 11. Deferred architecture concerns
 
 These need dedicated design work when their features are approved:
 
-- Transfers (F-008): representation of source/destination accounts and fees without double-counting balances; changes to the transaction type model.
 - Budgets/statistics (F-012/F-013): aggregation queries or materialized summaries.
 - Recurring/installments (F-017): scheduled generation semantics and accrual rules from the guide.
 - Offline support (F-022): local persistence, sync, and conflict resolution; explicitly outside **D-004**.
@@ -166,6 +168,6 @@ These need dedicated design work when their features are approved:
 
 ## 12. Open questions and AI handoff
 
-No open questions block architecture work. Supabase name and region are fixed by **D-007**; only the Vercel portion of Q-006 is deferred until deployment. Money, dates, deletes, balances, state, CI, and the no-photos rule are settled by D-008–D-014.
+No open questions block architecture work. Supabase name and region are fixed by **D-007**; only the Vercel portion of Q-006 is deferred until deployment. Money, amended dates, deletes, amended balances, state, CI, and the no-photos rule are settled by D-008–D-014; editable record time is settled by amended **D-009** and the unified three-type ledger by **D-019**, which supersedes **D-018**.
 
-Before writing more application code, read [FEATURES.md](./FEATURES.md) for the baseline boundary and [ROADMAP.md](./ROADMAP.md) for the current phase. All three migrations are applied, Supabase email confirmation is off, and sign-in/out plus two-user RLS isolation are verified for both profile and ledger tables. Do not introduce deferred architecture (offline sync, file storage, schedulers) into the baseline.
+Before writing more application code, read [FEATURES.md](./FEATURES.md) for the baseline boundary and [ROADMAP.md](./ROADMAP.md) for the current phase. Migrations `0001`–`0005` are applied and verified. Supabase email confirmation is off, and sign-in/out plus two-user RLS isolation are verified for both profile and ledger tables. Do not introduce deferred architecture (offline sync, file storage, schedulers) into the baseline.

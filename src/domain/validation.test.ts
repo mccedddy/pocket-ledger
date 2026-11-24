@@ -11,6 +11,10 @@ import {
   validateAmount,
   validateCalendarDate,
   validateEntityName,
+  validateFeeAmount,
+  validateLocalDateTime,
+  validateTransactionDraft,
+  validateTransferAccounts,
 } from './validation'
 
 describe('validation helpers', () => {
@@ -64,5 +68,81 @@ describe('validation helpers', () => {
     expect(validateCalendarDate('2026-11-24')).toBeNull()
     expect(validateCalendarDate('')).toBe('Choose a date.')
     expect(validateCalendarDate('2026-02-30')).toBe('Enter a valid date.')
+  })
+
+  it('requires a valid local date and time', () => {
+    expect(validateLocalDateTime('2026-11-24T08:30')).toBeNull()
+    expect(validateLocalDateTime('')).toBe('Choose a date and time.')
+    expect(validateLocalDateTime('2026-02-30T08:30')).toBe('Enter a valid date and time.')
+  })
+
+  it('requires two distinct transfer accounts', () => {
+    expect(validateTransferAccounts('a', 'b')).toBeNull()
+    expect(validateTransferAccounts('', 'b')).toBe('Choose a source account.')
+    expect(validateTransferAccounts('a', 'a')).toBe('Choose two different accounts.')
+  })
+
+  it('allows a blank or positive fee but rejects negative fees', () => {
+    expect(validateFeeAmount('')).toBeNull()
+    expect(validateFeeAmount('2.50')).toBeNull()
+    expect(validateFeeAmount('-1')).toBe('Fee cannot be negative.')
+    expect(validateFeeAmount('1.234')).toBe('Enter a valid fee with up to two decimal places.')
+  })
+})
+
+describe('three-type transaction draft validation (D-019)', () => {
+  const baseDraft = {
+    occurredAt: '2026-11-25T09:30',
+    accountId: 'account-1',
+    toAccountId: 'account-2',
+    categoryId: 'category-expense',
+    amount: '10.00',
+    fee: '',
+  }
+
+  it('validates income/expense drafts with an account and category', () => {
+    expect(validateTransactionDraft({ ...baseDraft, type: 'expense' })).toEqual({})
+    expect(
+      validateTransactionDraft({ ...baseDraft, type: 'income', categoryId: '' }).category,
+    ).toBe('Choose a category of the selected type.')
+  })
+
+  it('validates transfer drafts with distinct accounts and an optional fee', () => {
+    expect(
+      validateTransactionDraft({
+        ...baseDraft,
+        type: 'transfer',
+        categoryId: '',
+        fee: '2.50',
+      }),
+    ).toEqual({})
+    expect(
+      validateTransactionDraft({
+        ...baseDraft,
+        type: 'transfer',
+        categoryId: '',
+        toAccountId: 'account-1',
+      }).accounts,
+    ).toBe('Choose two different accounts.')
+    expect(
+      validateTransactionDraft({
+        ...baseDraft,
+        type: 'transfer',
+        categoryId: '',
+        fee: '-1',
+      }).fee,
+    ).toBe('Fee cannot be negative.')
+  })
+
+  it('still requires a valid date and positive amount for every type', () => {
+    const errors = validateTransactionDraft({
+      ...baseDraft,
+      type: 'transfer',
+      categoryId: '',
+      occurredAt: '',
+      amount: '0',
+    })
+    expect(errors.date).toBe('Choose a date and time.')
+    expect(errors.amount).toBe('Amount must be greater than zero.')
   })
 })

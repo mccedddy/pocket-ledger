@@ -1,4 +1,4 @@
-import { isValidCalendarDate } from './date'
+import { isValidCalendarDate, isValidLocalDateTime } from './date'
 import { parseAmount } from './money'
 
 export const NICKNAME_MAX_LENGTH = 30
@@ -69,4 +69,60 @@ export function validateCalendarDate(value: string): string | null {
   if (!value) return 'Choose a date.'
   if (!isValidCalendarDate(value)) return 'Enter a valid date.'
   return null
+}
+
+export function validateLocalDateTime(value: string): string | null {
+  if (!value) return 'Choose a date and time.'
+  if (!isValidLocalDateTime(value)) return 'Enter a valid date and time.'
+  return null
+}
+
+/** Transfers require two distinct own accounts (D-019). */
+export function validateTransferAccounts(sourceId: string, destinationId: string): string | null {
+  if (!sourceId) return 'Choose a source account.'
+  if (!destinationId) return 'Choose a destination account.'
+  if (sourceId === destinationId) return 'Choose two different accounts.'
+  return null
+}
+
+/** Optional fee is zero when blank and may not be negative (D-019). */
+export function validateFeeAmount(value: string): string | null {
+  if (!value.trim()) return null
+  const fee = parseAmount(value)
+  if (fee === null) return 'Enter a valid fee with up to two decimal places.'
+  if (fee < 0) return 'Fee cannot be negative.'
+  return null
+}
+
+export type TransactionDraft = {
+  type: 'income' | 'expense' | 'transfer'
+  occurredAt: string
+  accountId: string
+  toAccountId: string
+  categoryId: string
+  amount: string
+  fee: string
+}
+
+export type TransactionDraftErrors = Record<string, string | undefined>
+
+/** Type-specific validation for the single record screen (D-019). */
+export function validateTransactionDraft(draft: TransactionDraft): TransactionDraftErrors {
+  const errors: TransactionDraftErrors = {}
+  const dateError = validateLocalDateTime(draft.occurredAt)
+  const amountError = validateAmount(draft.amount)
+  if (dateError) errors.date = dateError
+  if (amountError) errors.amount = amountError
+
+  if (draft.type === 'transfer') {
+    const accountError = validateTransferAccounts(draft.accountId, draft.toAccountId)
+    if (accountError) errors.accounts = accountError
+    const feeError = validateFeeAmount(draft.fee)
+    if (feeError) errors.fee = feeError
+  } else {
+    if (!draft.accountId) errors.account = 'Choose an account.'
+    if (!draft.categoryId) errors.category = 'Choose a category of the selected type.'
+  }
+
+  return errors
 }

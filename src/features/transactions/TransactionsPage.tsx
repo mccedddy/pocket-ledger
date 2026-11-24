@@ -1,37 +1,33 @@
-import { useState } from 'react'
 import type { Transaction } from '../../data/transactionRepository'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/authContext'
 import { useAccounts } from '../accounts/useAccounts'
 import { useCategories } from '../categories/useCategories'
 import { useProfile } from '../settings/useProfile'
-import { formatLocalDate } from '../../domain/date'
+import { formatLocalDate, localDateKey } from '../../domain/date'
 import { formatCurrency, normalizeCurrencyCode } from '../../domain/currency'
+import { describeTransaction } from '../../domain/transactionDisplay'
 import { Button } from '../../shared/Button'
 import { Card } from '../../shared/Card'
 import { LinkButton } from '../../shared/LinkButton'
-import { ListRow } from '../../shared/ListRow'
 import { PageHeader } from '../../shared/PageHeader'
-import { useDeleteTransaction, useTransactions } from './useTransactions'
+import { useTransactions } from './useTransactions'
+
+type DayGroup = {
+  date: string
+  items: Transaction[]
+  incomeTotal: number
+  expenseTotal: number
+}
 
 export function TransactionsPage() {
   const { session } = useAuth()
+  const navigate = useNavigate()
   const userId = session!.user.id
   const transactions = useTransactions(userId)
   const accounts = useAccounts(userId)
   const categories = useCategories(userId)
   const profile = useProfile(session!.user)
-  const remove = useDeleteTransaction(userId)
-  const [actionError, setActionError] = useState<string | null>(null)
-
-  const handleDelete = async (transaction: Transaction) => {
-    setActionError(null)
-    if (!window.confirm('Delete this record? This cannot be undone.')) return
-    try {
-      await remove.mutateAsync(transaction.id)
-    } catch {
-      setActionError('Could not delete the record. Please try again.')
-    }
-  }
 
   if (
     transactions.isLoading ||
@@ -65,92 +61,117 @@ export function TransactionsPage() {
   const accountNames = new Map(accounts.data?.map((account) => [account.id, account.name]) ?? [])
   const categoryNames = new Map(categories.data?.map((category) => [category.id, category.name]) ?? [])
 
-  const groups: { date: string; items: Transaction[] }[] = []
+  const groups: DayGroup[] = []
   for (const transaction of transactions.data ?? []) {
-    const last = groups[groups.length - 1]
-    if (last?.date === transaction.occurred_on) {
-      last.items.push(transaction)
-    } else {
-      groups.push({ date: transaction.occurred_on, items: [transaction] })
+    const dateKey = localDateKey(transaction.occurred_at)
+    let group = groups[groups.length - 1]
+    if (group?.date !== dateKey) {
+      group = { date: dateKey, items: [], incomeTotal: 0, expenseTotal: 0 }
+      groups.push(group)
     }
+    group.items.push(transaction)
+    if (transaction.type === 'income') group.incomeTotal += transaction.amount
+    if (transaction.type === 'expense') group.expenseTotal -= transaction.amount
   }
+
+  const amountText = (amount: number) =>
+    `${amount >= 0 ? '+' : '−'}${formatCurrency(Math.abs(amount), currency)}`
+  const totalText = (amount: number, sign: '+' | '−') =>
+    `${sign}${formatCurrency(Math.abs(amount), currency)}`
 
   return (
     <>
       <PageHeader
         title="Transactions"
-        description="Your income and expense records, newest first."
+        description="A single ledger, newest first."
         action={<LinkButton to="/transactions/new">New record</LinkButton>}
       />
-
-      {actionError && (
-        <p role="alert" className="mb-4 text-sm text-expense">
-          {actionError}
-        </p>
-      )}
 
       {groups.length === 0 ? (
         <Card>
           <p className="text-sm text-muted">No records yet.</p>
-          <LinkButton to="/transactions/new" variant="secondary" >
+          <LinkButton to="/transactions/new" variant="secondary">
             Add your first record
           </LinkButton>
         </Card>
       ) : (
         <div className="flex flex-col gap-5">
           {groups.map((group) => (
-            <section key={group.date}>
-              <h2 className="mb-2 text-sm font-semibold text-muted">
-                {formatLocalDate(group.date)}
-              </h2>
-              <Card className="p-0">
-                <ul>
-                  {group.items.map((transaction) => {
-                    const isIncome = transaction.type === 'income'
-                    const details = [
-                      isIncome ? 'Income' : 'Expense',
-                      accountNames.get(transaction.account_id) ?? 'Account',
-                      transaction.payee,
-                      transaction.note,
-                    ].filter(Boolean)
-                    return (
-                      <ListRow
-                        key={transaction.id}
-                        title={categoryNames.get(transaction.category_id) ?? 'Category'}
-                        subtitle={details.join(' · ')}
-                        trailing={
-                          <span
-                            className={`text-sm font-semibold tabular-nums ${
-                              isIncome ? 'text-income' : 'text-expense'
-                            }`}
-                          >
-                            {isIncome ? '+' : '−'}
-                            {formatCurrency(Math.abs(transaction.amount), currency)}
-                          </span>
-                        }
-                        actions={
-                          <>
-                            <LinkButton
-                              to={`/transactions/${transaction.id}/edit`}
-                              variant="secondary"
+            <Card key={group.date} className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] table-fixed text-left text-sm">
+                  <colgroup>
+                    <col className="w-32" />
+                    <col />
+                    <col className="w-36" />
+                  </colgroup>
+                  <tbody className="divide-y divide-border">
+                    <tr className="h-16 bg-surface-subtle">
+                      <td className="whitespace-nowrap px-4 py-2 align-middle font-semibold">
+                        {formatLocalDate(group.date)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 align-middle text-right font-semibold tabular-nums text-income">
+                        {totalText(group.incomeTotal, '+')}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2 align-middle text-right font-semibold tabular-nums text-expense">
+                        {totalText(group.expenseTotal, '−')}
+                      </td>
+                    </tr>
+                    {group.items.map((transaction) => {
+                      const display = describeTransaction(transaction, accountNames, categoryNames)
+                      const positive = display.signedAmount >= 0
+                      const openEditor = () => navigate(`/transactions/${transaction.id}/edit`)
+                      return (
+                        <tr
+                          key={transaction.id}
+                          tabIndex={0}
+                          aria-label="Edit record"
+                          onClick={openEditor}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              openEditor()
+                            }
+                          }}
+                          className="h-16 cursor-pointer transition-colors hover:bg-surface-subtle focus:bg-surface-subtle focus:outline-none"
+                        >
+                          <td className="whitespace-nowrap px-4 py-2 align-middle text-muted">
+                            {display.category}
+                          </td>
+                          <td className="px-4 py-2 align-middle">
+                            {display.note && (
+                              <span className="block truncate" title={display.note}>
+                                {display.note}
+                              </span>
+                            )}
+                            <span
+                              className={`block truncate text-xs text-muted ${display.note ? 'mt-0.5' : ''}`}
+                              title={display.accountLine}
                             >
-                              Edit
-                            </LinkButton>
-                            <Button
-                              variant="ghost"
-                              aria-label="Delete record"
-                              onClick={() => void handleDelete(transaction)}
+                              {display.accountLine}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2 align-middle text-right">
+                            <span
+                              className={`font-semibold tabular-nums ${
+                                positive ? 'text-income' : 'text-expense'
+                              }`}
                             >
-                              Delete
-                            </Button>
-                          </>
-                        }
-                      />
-                    )
-                  })}
-                </ul>
-              </Card>
-            </section>
+                              {amountText(display.signedAmount)}
+                            </span>
+                            {display.fee !== null && (
+                              <span className="mt-0.5 block text-xs text-muted">
+                                Fee {formatCurrency(display.fee, currency)}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           ))}
         </div>
       )}

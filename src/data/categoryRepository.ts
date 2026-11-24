@@ -1,4 +1,4 @@
-import type { Database, LedgerType } from './database.types'
+import type { CategoryType, Database } from './database.types'
 import { getSupabaseClient } from './supabase'
 
 export type Category = Database['public']['Tables']['categories']['Row']
@@ -57,6 +57,6 @@ export async function deleteCategory(userId: string, id: string): Promise<void> 
   if (error) throw error
 }
 
-export function categoriesOfType(categories: readonly Category[], type: LedgerType): Category[] {
+export function categoriesOfType(categories: readonly Category[], type: CategoryType): Category[] {
   return categories.filter((category) => category.type === type)
 }

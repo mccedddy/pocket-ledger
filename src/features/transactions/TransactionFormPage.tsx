@@ -8,8 +8,11 @@ import { categoriesOfType } from '../../data/categoryRepository'
 import { useAuth } from '../auth/authContext'
 import { useAccounts } from '../accounts/useAccounts'
 import { useCategories } from '../categories/useCategories'
-import { todayLocalDate } from '../../domain/date'
-import { validateAmount, validateCalendarDate } from '../../domain/validation'
+import { todayLocalDateTime } from '../../domain/date'
+import {
+  validateTransactionDraft,
+  type TransactionDraftErrors,
+} from '../../domain/validation'
 import { Button } from '../../shared/Button'
 import { Card } from '../../shared/Card'
 import { Field } from '../../shared/Field'
@@ -23,9 +26,8 @@ import { useDeleteTransaction, useSaveTransaction, useTransactions } from './use
 const typeOptions = [
   { value: 'expense' as const, label: 'Expense' },
   { value: 'income' as const, label: 'Income' },
+  { value: 'transfer' as const, label: 'Transfer' },
 ]
-
-type FormErrors = Record<string, string | undefined>
 
 export function TransactionFormPage() {
   const { id } = useParams()
@@ -79,40 +81,57 @@ function TransactionForm({
   const save = useSaveTransaction(userId)
   const remove = useDeleteTransaction(userId)
   const [type, setType] = useState<LedgerType>(existing?.type ?? 'expense')
-  const [occurredOn, setOccurredOn] = useState(existing?.occurred_on ?? todayLocalDate())
+  const [occurredAt, setOccurredAt] = useState(existing?.occurred_at ?? todayLocalDateTime())
   const [accountId, setAccountId] = useState(existing?.account_id ?? '')
+  const [toAccountId, setToAccountId] = useState(
+    existing?.to_account_id ?? accounts[1]?.id ?? '',
+  )
   const [categoryId, setCategoryId] = useState(existing?.category_id ?? '')
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '')
+  const [fee, setFee] = useState(
+    existing && existing.fee_amount > 0 ? String(existing.fee_amount) : '',
+  )
   const [payee, setPayee] = useState(existing?.payee ?? '')
   const [note, setNote] = useState(existing?.note ?? '')
-  const [errors, setErrors] = useState<FormErrors>({})
+  const [errors, setErrors] = useState<TransactionDraftErrors>({})
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const availableCategories = categoriesOfType(categories, type)
+  const isTransfer = type === 'transfer'
+  const availableCategories =
+    type === 'transfer' ? [] : categoriesOfType(categories, type)
   const resolvedAccountId = accountId || accounts[0]?.id || ''
+  const resolvedToAccountId =
+    toAccountId || accounts.find((account) => account.id !== resolvedAccountId)?.id || ''
   const resolvedCategoryId =
     categoryId && availableCategories.some((category) => category.id === categoryId)
       ? categoryId
       : (availableCategories[0]?.id ?? '')
-  const canSave = accounts.length > 0 && availableCategories.length > 0
+  const canSave =
+    accounts.length > 0 &&
+    (isTransfer ? accounts.length >= 2 : availableCategories.length > 0)
 
   const handleTypeChange = (next: LedgerType) => {
     setType(next)
     setCategoryId('')
-    setErrors((current) => ({ ...current, category: undefined }))
+    setToAccountId('')
+    setFee('')
+    setPayee('')
+    setErrors({})
   }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setActionError(null)
 
-    const nextErrors: FormErrors = {}
-    const dateError = validateCalendarDate(occurredOn)
-    const amountError = validateAmount(amount)
-    if (dateError) nextErrors.date = dateError
-    if (!resolvedAccountId) nextErrors.account = 'Choose an account.'
-    if (!resolvedCategoryId) nextErrors.category = 'Choose a category of the selected type.'
-    if (amountError) nextErrors.amount = amountError
+    const nextErrors = validateTransactionDraft({
+      type,
+      occurredAt,
+      accountId: resolvedAccountId,
+      toAccountId: resolvedToAccountId,
+      categoryId: resolvedCategoryId,
+      amount,
+      fee,
+    })
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
@@ -121,11 +140,13 @@ function TransactionForm({
         id: existing?.id,
         input: {
           type,
-          occurred_on: occurredOn,
+          occurred_at: occurredAt,
           account_id: resolvedAccountId,
-          category_id: resolvedCategoryId,
+          to_account_id: isTransfer ? resolvedToAccountId : null,
+          category_id: isTransfer ? null : resolvedCategoryId,
           amount: Number(amount),
-          payee: payee.trim() || null,
+          fee_amount: isTransfer ? Number(fee.trim() || 0) : 0,
+          payee: isTransfer ? null : payee.trim() || null,
           note: note.trim() || null,
         },
       })
@@ -148,29 +169,35 @@ function TransactionForm({
   }
 
   const isPending = save.isPending || remove.isPending
+  const missingMessage =
+    accounts.length === 0
+      ? 'Add an account before recording a transaction.'
+      : isTransfer
+        ? 'Add at least two accounts before recording a transfer.'
+        : `Add a ${type} category before recording a transaction.`
 
   return (
     <>
       <PageHeader
         title={existing ? 'Edit record' : 'New record'}
-        description="Account, category, date, and amount are required."
+        description="Choose Expense, Income, or Transfer. Date and time default to now."
       />
 
       <Card>
         {!canSave ? (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-muted">
-              Add an account and a {type} category before recording a transaction.
-            </p>
+            <p className="text-sm text-muted">{missingMessage}</p>
             <div className="flex flex-wrap gap-3">
               {accounts.length === 0 && (
                 <LinkButton to="/accounts/new" variant="secondary">
                   New account
                 </LinkButton>
               )}
-              <LinkButton to="/categories/new" variant="secondary">
-                New category
-              </LinkButton>
+              {!isTransfer && (
+                <LinkButton to="/categories/new" variant="secondary">
+                  New category
+                </LinkButton>
+              )}
             </div>
           </div>
         ) : (
@@ -186,57 +213,104 @@ function TransactionForm({
               />
             </div>
 
-            <Field label="Date" htmlFor="record-date" error={errors.date}>
+            <Field label="Date and time" htmlFor="record-date" error={errors.date}>
               <Input
                 id="record-date"
-                aria-label="Date"
-                type="date"
-                value={occurredOn}
+                aria-label="Date and time"
+                type="datetime-local"
+                value={occurredAt}
                 invalid={Boolean(errors.date)}
                 onChange={(event) => {
-                  setOccurredOn(event.target.value)
+                  setOccurredAt(event.target.value)
                   setErrors((current) => ({ ...current, date: undefined }))
                 }}
               />
             </Field>
 
-            <Field label="Account" htmlFor="record-account" error={errors.account}>
-              <Select
-                id="record-account"
-                aria-label="Account"
-                value={resolvedAccountId}
-                invalid={Boolean(errors.account)}
-                onChange={(event) => {
-                  setAccountId(event.target.value)
-                  setErrors((current) => ({ ...current, account: undefined }))
-                }}
-              >
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {isTransfer ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Source account"
+                  htmlFor="record-source"
+                  error={errors.accounts}
+                >
+                  <Select
+                    id="record-source"
+                    aria-label="Source account"
+                    value={resolvedAccountId}
+                    invalid={Boolean(errors.accounts)}
+                    onChange={(event) => {
+                      setAccountId(event.target.value)
+                      setErrors((current) => ({ ...current, accounts: undefined }))
+                    }}
+                  >
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
 
-            <Field label="Category" htmlFor="record-category" error={errors.category}>
-              <Select
-                id="record-category"
-                aria-label="Category"
-                value={resolvedCategoryId}
-                invalid={Boolean(errors.category)}
-                onChange={(event) => {
-                  setCategoryId(event.target.value)
-                  setErrors((current) => ({ ...current, category: undefined }))
-                }}
-              >
-                {availableCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+                <Field label="Destination account" htmlFor="record-destination">
+                  <Select
+                    id="record-destination"
+                    aria-label="Destination account"
+                    value={resolvedToAccountId}
+                    onChange={(event) => {
+                      setToAccountId(event.target.value)
+                      setErrors((current) => ({ ...current, accounts: undefined }))
+                    }}
+                  >
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+            ) : (
+              <>
+                <Field label="Account" htmlFor="record-account" error={errors.account}>
+                  <Select
+                    id="record-account"
+                    aria-label="Account"
+                    value={resolvedAccountId}
+                    invalid={Boolean(errors.account)}
+                    onChange={(event) => {
+                      setAccountId(event.target.value)
+                      setErrors((current) => ({ ...current, account: undefined }))
+                    }}
+                  >
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field label="Category" htmlFor="record-category" error={errors.category}>
+                  <Select
+                    id="record-category"
+                    aria-label="Category"
+                    value={resolvedCategoryId}
+                    invalid={Boolean(errors.category)}
+                    onChange={(event) => {
+                      setCategoryId(event.target.value)
+                      setErrors((current) => ({ ...current, category: undefined }))
+                    }}
+                  >
+                    {availableCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </>
+            )}
 
             <Field label="Amount" htmlFor="record-amount" error={errors.amount}>
               <Input
@@ -253,15 +327,32 @@ function TransactionForm({
               />
             </Field>
 
-            <Field label="Payee (optional)" htmlFor="record-payee">
-              <Input
-                id="record-payee"
-                aria-label="Payee"
-                value={payee}
-                onChange={(event) => setPayee(event.target.value)}
-                placeholder="Where the money went or came from"
-              />
-            </Field>
+            {isTransfer ? (
+              <Field label="Fee (optional)" htmlFor="record-fee" error={errors.fee}>
+                <Input
+                  id="record-fee"
+                  aria-label="Fee"
+                  inputMode="decimal"
+                  value={fee}
+                  invalid={Boolean(errors.fee)}
+                  onChange={(event) => {
+                    setFee(event.target.value)
+                    setErrors((current) => ({ ...current, fee: undefined }))
+                  }}
+                  placeholder="0.00"
+                />
+              </Field>
+            ) : (
+              <Field label="Payee (optional)" htmlFor="record-payee">
+                <Input
+                  id="record-payee"
+                  aria-label="Payee"
+                  value={payee}
+                  onChange={(event) => setPayee(event.target.value)}
+                  placeholder="Where the money went or came from"
+                />
+              </Field>
+            )}
 
             <Field label="Note (optional)" htmlFor="record-note">
               <Input
