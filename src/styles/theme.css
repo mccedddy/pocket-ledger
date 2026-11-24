@@ -1,0 +1,66 @@
+/* D-005 design tokens. Raw values use --pl-*; semantic Tailwind names are
+   exposed through @theme inline below so the dark class can swap them. */
+
+:root {
+  color-scheme: light;
+
+  --pl-primary: #e11d48;
+  --pl-primary-strong: #be123c;
+  --pl-primary-soft: #ffe4e6;
+  --pl-income: #059669;
+  --pl-expense: #b91c1c;
+  --pl-warning: #d97706;
+  --pl-surface: #ffffff;
+  --pl-surface-subtle: #f8fafc;
+  --pl-surface-raised: #ffffff;
+  --pl-text: #0f172a;
+  --pl-text-muted: #64748b;
+  --pl-border: #e2e8f0;
+  --pl-focus: #e11d48;
+  --pl-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --pl-primary: #fb7185;
+  --pl-primary-strong: #fda4af;
+  --pl-primary-soft: rgba(251, 113, 133, 0.14);
+  --pl-income: #34d399;
+  --pl-expense: #fca5a5;
+  --pl-warning: #fbbf24;
+  --pl-surface: #0b1120;
+  --pl-surface-subtle: #111827;
+  --pl-surface-raised: #1f2937;
+  --pl-text: #f8fafc;
+  --pl-text-muted: #94a3b8;
+  --pl-border: #334155;
+  --pl-focus: #fb7185;
+  --pl-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-primary: var(--pl-primary);
+  --color-primary-strong: var(--pl-primary-strong);
+  --color-primary-soft: var(--pl-primary-soft);
+  --color-income: var(--pl-income);
+  --color-expense: var(--pl-expense);
+  --color-warning: var(--pl-warning);
+  --color-surface: var(--pl-surface);
+  --color-surface-subtle: var(--pl-surface-subtle);
+  --color-surface-raised: var(--pl-surface-raised);
+  --color-text: var(--pl-text);
+  --color-muted: var(--pl-text-muted);
+  --color-border: var(--pl-border);
+  --color-focus: var(--pl-focus);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius-control: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-pill: 999px;
+
+  --shadow-raised: var(--pl-shadow);
+}

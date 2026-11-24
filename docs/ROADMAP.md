@@ -1,7 +1,7 @@
 # Pocket Ledger — Roadmap
 
 > Last updated: 2026-11-24
-> Status: **Documentation only.** No application features have been implemented.
+> Status: **Phase 1 implemented and sign-in verified.** Nickname editing and PHP currency support are in Settings; only two-user RLS verification remains. No Phase 2 features have been implemented.
 
 ## 1. How to use this roadmap
 
@@ -14,18 +14,18 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 | Phase | Name | Features | Status |
 | --- | --- | --- | --- |
 | 0 | Documentation and decisions | This document set | Complete |
-| 1 | Foundation | F-001, F-006, F-007, F-023 | Not started |
+| 1 | Foundation | F-001, F-006, F-007, F-023 | Implemented; both migrations applied, sign-in verified, two-user RLS pending |
 | 2 | Core ledger (baseline) | F-002, F-003, F-004, F-005 | Not started |
 | 3 | Transaction usability | F-008, F-009, F-010, F-011 | Deferred |
 | 4 | Planning and insights | F-012, F-013, F-014 | Deferred |
-| 5 | Advanced features | F-015–F-021 | Deferred |
+| 5 | Advanced features | F-016–F-021 | Deferred (F-015 out of scope) |
 | 6 | Optional offline support | F-022 | Deferred, open |
 
 ## 3. Phase 0 — Documentation and decisions (complete)
 
 **Deliverables:** `docs/PRODUCT.md`, `docs/FEATURES.md`, `docs/UI.md`, `docs/ARCHITECTURE.md`, `docs/DATABASE.md`, `docs/ROADMAP.md`.
 
-**Outcome:** Baseline scope, confirmed decisions D-001–D-005 (including the D-005 design system), and open questions Q-001–Q-010 are recorded; Q-004 is resolved by D-005. No code was created.
+**Outcome:** Baseline scope and confirmed decisions D-001–D-014 are recorded. Q-005 is closed (no photos anywhere); Supabase name and region are fixed by **D-007** (`pocket-ledger`, `ap-northeast-2`), with only Vercel details of Q-006 deferred until deployment. All Phase 1 entry gates are resolved. No code was created.
 
 ## 4. Phase 1 — Foundation
 
@@ -33,40 +33,43 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 
 **Entry gates:**
 
-- Q-006 answered: Supabase project, Vercel project, region, and environment names.
-- Q-001, Q-002, Q-007, Q-008 answered well enough to write the first migration (see [DATABASE.md](./DATABASE.md) §9).
-- Q-009 answered: data-fetching/state approach.
-- Q-010 answered: branch/CI approach for Vercel previews and production.
+- Supabase project details are fixed by **D-007**: name `pocket-ledger`, region `ap-northeast-2`. Only the Vercel project/environment names in Q-006 remain, and they are not needed until deployment, which is deferred per **D-007**.
+- D-008–D-011 settle money, dates, deletes, and balances for the first migration (see [DATABASE.md](./DATABASE.md) §9).
+- D-012 settles state/data fetching (TanStack Query); D-013 records the future Vercel CI approach but does not block Phase 1.
 
 **Work items:**
 
 1. Scaffold React + TypeScript + Vite with Tailwind CSS v4; establish formatting/linting, folder structure, and the D-005 token file from the architecture and UI docs.
 2. Create the Supabase schema migration and RLS policies for `profiles` only (currency plus `theme`, audit/type conventions).
-3. Implement Supabase email sign-in, session handling, route guard, and sign-out.
-4. Implement profile creation on signup and the single-currency setting (F-006).
+3. Implement Supabase email + password sign-up/sign-in (with nickname), session handling, route guard, and sign-out.
+4. Implement profile creation on signup (including nickname), nickname editing in Settings, and the single-currency setting with PHP support (F-006).
 5. Implement the theme provider and manual light/dark toggle in Settings, default light, applied before first paint (F-023).
 6. Add PWA manifest, icons, and minimal registration (F-007).
-7. Connect Vercel deployment and document environment variables without committing secrets.
+7. Prepare a Vercel-ready production build configuration and document local/Supabase environment variables without committing secrets. Do **not** create a Vercel project; deployment setup is deferred per **D-007** and Q-006. Use D-013 when deployment begins.
+
+**Implementation notes (this session):** React + TypeScript + Vite, Tailwind CSS v4, TanStack Query, React Router, Supabase JS, and `vite-plugin-pwa` are installed. Source lives under `src/app`, `src/features`, `src/domain`, `src/data`, and `src/shared`. Both profile migrations are applied. Auth is email + password: `/sign-up` collects nickname, email, password, and confirmation; `/sign-in` collects email and password; magic links and `/auth/callback` are removed. Supabase email confirmation is off, and sign-in has been verified. Settings can change the required nickname and offers PHP in the currency selector while keeping USD default (**D-017**). The transactions route is a temporary placeholder for Phase 2. `.env.example`, `vercel.json`, PWA icons, and unit/component tests were added. Local lint, typecheck, tests, and production build pass. The environment is configured with `VITE_SUPABASE_PUBLISHABLE_KEY`; an anonymous REST read of `profiles` returned `200 []`, confirming RLS hides rows. Two-user RLS verification remains.
 
 **Exit criteria:**
 
-- A user can sign in and sign out; unauthenticated access to protected routes is blocked.
-- RLS denies access to another user's profile.
-- The currency setting persists and formats display values without mutating amounts.
-- A new profile defaults to light; switching to dark persists, uses D-005 tokens, and does not flash light on reload.
-- The app is installable as a PWA with no offline-data behavior.
-- Production and preview builds succeed; no secret keys are committed.
+- A user can sign up with a nickname, sign in, and sign out; unauthenticated access to protected routes is blocked. *(Sign-up/sign-in verified; sign-out and two-user RLS verification pending.)*
+- A user can change the nickname in Settings and cannot save it blank. *(Code complete; Supabase verification pending.)*
+- The currency selector includes PHP and USD remains the default. *(Verified locally.)*
+- RLS denies access to another user's profile. *(Anonymous read verified; two-user check pending.)*
+- The currency setting persists and formats display values without mutating amounts. *(Code complete; Supabase verification pending.)*
+- A new profile defaults to light; switching to dark persists, uses D-005 tokens, and does not flash light on reload. *(Code complete and pre-paint token script added; Supabase verification pending.)*
+- The app is installable as a PWA with no offline-data behavior. *(Manifest and minimal service worker generated; browser install check pending.)*
+- The production build succeeds locally; no secret keys are committed. **Verified.** Vercel deployment success is not a Phase 1 exit criterion because no Vercel project exists yet.
 
 ## 5. Phase 2 — Core ledger (baseline completion)
 
 **Scope:** F-002 accounts, F-003 categories, F-004 income/expense records, F-005 transaction history.
 
-**Entry gates:** Phase 1 exit criteria; Q-003 answered if seed data is desired; Q-005 does not block this phase; visual design follows D-005 and needs no further decision.
+**Entry gates:** Phase 1 exit criteria, including two-user RLS verification; D-006 seed migration verified during Phase 2; visual design follows D-005 and needs no further decision. Photos are out of scope per **D-014**.
 
 **Work items:**
 
 1. Add migrations for `accounts`, `categories`, `transactions`, indexes, and RLS (per [DATABASE.md](./DATABASE.md)).
-2. Build account list/create/edit/delete screens with derived balances once Q-008 is resolved.
+2. Build account list/create/edit/delete screens with derived balances per **D-011**.
 3. Build income/expense category list/create/edit/delete screens with type consistency.
 4. Build record editor with the guide's required and optional fields (F-004).
 5. Build chronological transaction history with empty/loading/error states (F-005).
@@ -76,9 +79,9 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 
 - A signed-in user can create, edit, and delete accounts, categories, and income/expense records.
 - Required-field and category-type validation prevents invalid records.
-- A saved record appears in history and in the relevant account's balance calculation (rule Q-008).
+- A saved record appears in history and in the relevant account's balance calculation (rule **D-011**).
 - A second user cannot read or modify the first user's rows.
-- No deferred feature (transfers, filters, budgets, stats, photos, recurring, cards) has been implemented.
+- No deferred feature (transfers, filters, budgets, stats, recurring, cards) has been implemented, and no photo/receipt UI or storage exists (**D-014**).
 
 ## 6. Phase 3 — Transaction usability (deferred)
 
@@ -94,7 +97,7 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 
 **Scope:** F-012 budgets and carry-over, F-013 statistics, F-014 calendar/weekly/monthly/summary review views.
 
-**Entry gates:** Phase 3 complete (or explicitly skipped with owner approval); **D-001 amended**; Q-002 resolved for period boundaries.
+**Entry gates:** Phase 3 complete (or explicitly skipped with owner approval); **D-001 amended**; period boundaries follow **D-009** (user-local calendar).
 
 **Notes:** Budget defaults apply to all months unless overridden; changing a default does not rewrite month-specific overrides. Statistics are category-based with monthly default and list/trend modes. Both behaviors are documented in the guide and must not be guessed beyond it.
 
@@ -102,9 +105,9 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 
 ## 8. Phase 5 — Advanced features (deferred)
 
-**Scope:** F-015 receipt photos, F-016 notes, F-017 recurring/installments, F-018 cards, F-019 account display options, F-020 subcategories, F-021 backup/import.
+**Scope:** F-016 notes, F-017 recurring/installments, F-018 cards, F-019 account display options, F-020 subcategories, F-021 backup/import. F-015 (photos) is out of scope per **D-014** and is not part of this or any phase.
 
-**Entry gates:** Phase 4 complete or explicitly skipped; **D-001 amended** per feature group; Q-005 answered before photo storage work.
+**Entry gates:** Phase 4 complete or explicitly skipped; **D-001 amended** per feature group. There is no photo-related gate; photos are out of scope (**D-014**).
 
 **Notes:** Recurring and installment behavior includes accrual accounting and scheduled-date reflection. Card behavior includes billing account, settlement date, payment date, and settlement transfers. Hidden accounts still count toward totals in the reference app. Import/export needs a hosted-product definition because the reference app is local-first.
 
@@ -122,6 +125,6 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 
 1. Check the current phase before starting work; baseline phases are 1–2 only.
 2. If a task requires a deferred feature, stop and request a decision change to D-001 (or D-004 for offline support).
-3. If a task depends on an open question, ask the owner rather than choosing silently.
+3. If a task depends on an open, blocking question, ask the owner rather than choosing silently; deferred Q-006 is only relevant at deployment.
 4. After any accepted change, update this roadmap and the other affected docs in the same work session so the documentation remains consistent.
 5. Do not add dates, owners, or status claims that are not backed by an actual decision.

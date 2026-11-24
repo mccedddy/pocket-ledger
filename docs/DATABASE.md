@@ -1,22 +1,25 @@
 # Pocket Ledger — Database Design
 
 > Last updated: 2026-11-24
-> Status: **Documentation only.** No Supabase project, migration, table, or seed data has been created.
+> Status: **Phase 1 profile schema applied.** `supabase/migrations/0001_profiles.sql` defines `profiles` and its RLS/triggers; an anonymous REST read returns `200 []`. `supabase/migrations/0002_profile_nickname.sql` is also applied; nickname is editable in Settings. PHP is supported as a display currency with USD default. Two-user RLS verification is still pending. No Phase 2 tables or seed data exist.
 
 ## 1. Purpose and governing decisions
 
-This document is the proposed PostgreSQL/Supabase design for the baseline in [PRODUCT.md](./PRODUCT.md) §7. Schema SQL here is a **proposal for the first implementation session**, not an existing migration.
+This document is the PostgreSQL/Supabase design for the baseline in [PRODUCT.md](./PRODUCT.md) §7. Applied and authored migrations are recorded in §7; schema for later phases remains **proposed**.
 
 Governing items:
 
 - **D-001** — strict minimum: baseline tables only.
 - **D-002** — Supabase email auth; every user-data row has `user_id`; RLS enforces ownership.
 - **D-003** — one currency per user profile; no per-account currency or conversion tables.
-- **Q-001** — money storage type unresolved; `numeric(14,2)` is the working proposal.
-- **Q-002** — timezone/date-boundary semantics unresolved; `date` is the working proposal for transaction dates.
-- **Q-003** — empty vs seeded accounts/categories unresolved.
-- **Q-007** — hard vs soft delete unresolved.
-- **Q-008** — meaning of an account's initial amount and balance derivation unresolved.
+- **D-008** — money stored as `numeric(14,2)`; formatting/rounding in `domain/`.
+- **D-009** — calendar `date`, user-local timezone and local calendar boundaries.
+- **D-010** — hard delete with confirmation; restrict deletion of accounts/categories with records.
+- **D-011** — `initial_amount` is opening balance; balance derived as opening + income − expense.
+- **D-014** — no photos or receipts anywhere; no attachment table or storage design.
+- **D-015** — email + password auth with confirmation off; no magic-link/callback tables or columns.
+- **D-016** — required nickname at registration, editable in Settings, stored on `profiles` (1–30 characters).
+- **D-017** — `PHP` is a supported display currency; `USD` remains the default.
 
 ## 2. Proposed entity relationships
 
@@ -46,12 +49,13 @@ One row per authenticated user.
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
 | `id` | `uuid` | PK, references `auth.users(id)` on delete cascade | Same value as the auth user ID. |
-| `currency_code` | `char(3)` | not null | ISO-style currency code for **D-003**. Default `'USD'` is `Proposed`, not confirmed. |
+| `nickname` | `text` | not null, default `'Member'`, `check (char_length(btrim(nickname)) between 1 and 30)` | Required nickname from registration, editable in Settings (**D-016**); copied from Supabase user metadata by the auth trigger. |
+| `currency_code` | `char(3)` | not null | ISO-style currency code for **D-003**. Default `'USD'` is confirmed; supported values include `PHP` (**D-017**). |
 | `theme` | `text` | not null, default `'light'`, `check (theme in ('light', 'dark'))` | Manual light/dark preference for **D-005** / F-023. No `'system'` value in the baseline. |
 | `created_at` | `timestamptz` | not null, default `now()` | Audit. |
 | `updated_at` | `timestamptz` | not null, default `now()` | Audit; trigger or app-managed update is `Proposed`. |
 
-A trigger on `auth.users` insert to create the profile row is `Proposed` (Q-006 may affect implementation details).
+Phase 1 implementation: `0001_profiles.sql` creates this table, the `profiles_touch_updated_at` trigger, the RLS policies in §5, and the `on_auth_user_created` trigger. `0002_profile_nickname.sql` adds the `nickname` column, backfills existing rows from signup metadata or email, and updates the trigger to copy `raw_user_meta_data->>'nickname'`. Deferred Q-006 does not affect this design.
 
 ### `accounts`
 
@@ -60,7 +64,7 @@ A trigger on `auth.users` insert to create the profile row is `Proposed` (Q-006 
 | `id` | `uuid` | PK, default `gen_random_uuid()` | Surrogate key. |
 | `user_id` | `uuid` | not null, references `auth.users(id)` on delete cascade | Ownership (**D-002**). |
 | `name` | `text` | not null, non-empty after trim | Guide: name and amount are entered when adding an account. |
-| `initial_amount` | `numeric(14,2)` | not null, default `0` | Working proposal for Q-001/Q-008. Semantics must be confirmed. |
+| `initial_amount` | `numeric(14,2)` | not null, default `0` | Opening balance per **D-011**; type per **D-008**. |
 | `sort_order` | `integer` | not null, default `0` | Display ordering; reorder UI is deferred (F-019). |
 | `created_at` | `timestamptz` | not null, default `now()` | Audit. |
 | `updated_at` | `timestamptz` | not null, default `now()` | Audit. |
@@ -90,10 +94,10 @@ The baseline stores only income and expense records. Transfers (F-008), installs
 | `id` | `uuid` | PK, default `gen_random_uuid()` | Surrogate key. |
 | `user_id` | `uuid` | not null, references `auth.users(id)` on delete cascade | Ownership. |
 | `type` | `text` | not null, check (`income`, `expense`) | No `transfer` value in the baseline. |
-| `occurred_on` | `date` | not null | Working proposal for Q-002; no time-of-day in the baseline. |
+| `occurred_on` | `date` | not null | Calendar day in the user's local timezone per **D-009**; no time-of-day in the baseline. |
 | `account_id` | `uuid` | not null | Required by the guide. |
 | `category_id` | `uuid` | not null | Required by the guide. |
-| `amount` | `numeric(14,2)` | not null; `check (amount > 0)` is `Proposed` | Magnitude only; `type` supplies direction. The guide only says amount is mandatory. Storage type: Q-001. |
+| `amount` | `numeric(14,2)` | not null; `check (amount > 0)` is `Proposed` | Magnitude only; `type` supplies direction. The guide only says amount is mandatory. Storage type: **D-008**. |
 | `payee` | `text` | nullable | Optional seller/recipient field from the guide. |
 | `note` | `text` | nullable | Optional note from the guide. |
 | `created_at` | `timestamptz` | not null, default `now()` | Audit. |
@@ -104,7 +108,7 @@ Composite foreign keys (proposed):
 - `(account_id, user_id)` → `accounts(id, user_id)`.
 - `(category_id, user_id, type)` → `categories(id, user_id, type)` — this enforces that an income record uses an income category and an expense record uses an expense category at the database level.
 
-`on delete` behavior is **Q-007**; do not silently cascade deletes of transactions when an account or category is deleted.
+`on delete` behavior is **D-010**: hard deletes with confirmation; use `on delete restrict` so an account or category still referenced by records cannot be deleted. Do not silently cascade transactions.
 
 ## 4. Indexes (proposed)
 
@@ -141,21 +145,24 @@ create policy "accounts_all_own" on accounts
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 ```
 
-Apply the equivalent `for all` policy to `categories` and `transactions`. RLS is the security boundary; client-side filtering is not sufficient. Verify policies with two distinct test users before Phase 2 completion.
+The `profiles` policies above are applied in Supabase; an anonymous REST read returned no rows as expected. Apply the equivalent `for all` policy to `categories` and `transactions` in Phase 2. RLS is the security boundary; client-side filtering is not sufficient. Verify isolation with two distinct test users before Phase 2 completion.
 
 ## 6. Derived balances and money rules
 
-- The guide says an amount is entered when an account is created, but does not define how that amount interacts with later transactions. Therefore `initial_amount` semantics are **Q-008**.
-- `Proposed`: an account's displayed balance is derived, not stored, along the lines of `initial_amount + sum(income) - sum(expense)` for that account. Do not implement this rule as if it were confirmed; ask Q-008 first.
+- The guide says an amount is entered when an account is created, but does not define how that amount interacts with later transactions. **D-011** resolves this: `initial_amount` is the opening balance.
+- An account's displayed balance is derived, not stored: `initial_amount + sum(income) - sum(expense)` for that account. Recompute after record edits/deletes per **D-011**.
 - Whether balances are computed in SQL (view/RPC) or in the data layer is `Proposed` and follows [ARCHITECTURE.md](./ARCHITECTURE.md) §5.
-- Money arithmetic and rounding must be centralized in `domain/` helpers; the storage type depends on Q-001.
+- Money arithmetic and rounding are centralized in `domain/` helpers; the storage type is **D-008**.
 - Currency is display-only per **D-003**; no currency column belongs on accounts or transactions.
 
 ## 7. Migrations and seed data
 
 - `Proposed`: SQL migrations live in `supabase/migrations/`; TypeScript database types are generated from the schema and kept in the data layer.
-- No migration files exist yet. Phase 1 creates the first migration only after Q-001/Q-002/Q-007/Q-008 are answered.
-- Seed data: none until **Q-003** is answered. Do not assume a default set of accounts or categories.
+- The first migration, `supabase/migrations/0001_profiles.sql`, has been applied in Supabase. An anonymous REST read of `profiles` returned `200 []`, confirming the table exists and RLS returns no rows. All schema-blocking questions are resolved (D-008–D-011).
+- The second migration, `supabase/migrations/0002_profile_nickname.sql`, adds `nickname` and updates the profile trigger. It has been applied in Supabase, so Settings can read and update `profiles.nickname` immediately.
+- Seed data (**D-006**): new profiles receive exactly eight categories — **expense**: `Food`, `Transport`, `Wants`, `Rent`, `Bills`, `Necessities`; **income**: `Salary`, `Bonus`. No accounts are seeded.
+- The existing `Proposed` profile-creation trigger (see §3) is the natural place to insert the seed rows, or a dedicated function can be called from the signup flow; choose during Phase 1.
+- Project note (**D-007**): the Supabase project is named `pocket-ledger` and uses region `ap-northeast-2`. Vercel is not set up yet; no Vercel-specific schema or config exists.
 
 ## 8. Deferred data model outlines (do not create in the baseline)
 
@@ -167,7 +174,6 @@ These are notes for later sessions, not current schema:
 | F-011 Bookmarks | Saved transaction template with account/category/amount/payee/note and sort order. | Date is set to present when used (guide). |
 | F-012 Budgets | Per-category default amount plus month-specific overrides. | Default changes apply from next month; overrides win (guide). |
 | F-013 Statistics | Aggregation queries over transactions; no required stored tables. | Period/list/trend semantics from the guide. |
-| F-015 Photos | `attachments` table with transaction reference and storage path; Supabase Storage bucket. | Q-005. |
 | F-016 Notes | Date-keyed note rows with text/color. | Guide documents colored notes but exact rules need review. |
 | F-017 Recurring/installments | Rule tables: frequency, start/end, reflection-day setting, installment count and progress. | Accrual semantics from the guide. |
 | F-018 Cards | Card metadata on accounts: billing account, settlement date, payment date. | Cycle/overdue behavior from the guide. |
@@ -176,6 +182,6 @@ These are notes for later sessions, not current schema:
 
 ## 9. Open questions and AI handoff
 
-Resolve Q-001, Q-002, Q-007, and Q-008 before writing the first migration. Q-003 affects seed files only. Q-006 affects project/environment wiring.
+All schema decisions are resolved: D-008–D-011 cover money, dates, deletes, and balances; D-006 covers seed data; D-014 rules out any photo/attachment design; D-015/D-016 cover the password-auth mode and required nickname; D-017 covers PHP support with USD default. The remaining Vercel portion of Q-006 is deferred and non-blocking; Supabase name and region are fixed by **D-007**.
 
 When implementing, keep table and column names aligned with this document and update it if the schema changes. Do not create deferred tables "just in case".

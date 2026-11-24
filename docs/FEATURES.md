@@ -1,7 +1,7 @@
 # Pocket Ledger — Feature Inventory
 
 > Last updated: 2026-11-24
-> Status: **Documentation only.** These are requirements and deferred items, not implemented features.
+> Status: **Phase 1 features F-001, F-006, F-007, and F-023 are implemented locally.** Email/password sign-up and sign-in are verified; nickname is editable in Settings, and PHP is supported as a display currency. Phase 2 features remain unimplemented; deferred items are still only requirements.
 
 ## 1. Scope
 
@@ -13,13 +13,16 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 
 ### F-001 — User authentication and data ownership
 
-- **Status:** `Decided (D-002)` — technical prerequisite, no direct reference equivalent.
+- **Status:** `Decided (D-002, D-015, D-016)` — technical prerequisite, no direct reference equivalent.
 - **Behavior:** Users sign in with Supabase email authentication. Every user-data row is owned by a `user_id`; row-level security restricts reads and writes to the signed-in user's rows.
+- **Phase 1 implementation:** Email + password sign-up (`/sign-up`) and sign-in (`/sign-in`) via Supabase Auth. Email confirmation is off per **D-015**, so no email is sent and there is no callback route. Registration requires a nickname (1–30 characters, **D-016**) passed as Supabase user metadata and copied into `profiles` by the auth trigger. Settings can change that nickname, but cannot set it to blank. Forgot-password/reset is deferred.
 - **Acceptance criteria:**
   - Unauthenticated users cannot read or modify user data.
   - A signed-in user cannot read or modify another user's data.
-- **Dependencies:** Supabase project configuration (Q-006), auth schema (see [DATABASE.md](./DATABASE.md)).
-- **Open questions:** Q-006.
+  - A new account stores the supplied nickname in its `profiles` row.
+  - The nickname can be changed in Settings, but a blank value is rejected.
+- **Dependencies:** Supabase project configuration (**D-007**), auth schema (see [DATABASE.md](./DATABASE.md)).
+- **Deferred context:** Supabase name and region are fixed by **D-007** (`pocket-ledger`, `ap-northeast-2`); only the Vercel portion of Q-006 is non-blocking and deferred until deployment. No open questions.
 
 ### F-002 — Accounts: create, edit, delete, list
 
@@ -32,17 +35,20 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 - **Acceptance criteria (reference-derived):**
   - An account cannot be saved without a name and an amount, matching the guide's requirement to insert name and amount.
   - Account changes are visible in the account list.
-- **Open questions:** Q-003 (default accounts), Q-007 (delete semantics), Q-008 (meaning of the initial amount and balance derivation).
+- **Decisions applied:** D-010 (hard delete with restrict), D-011 (opening balance rule), D-006 (no seeded accounts).
+- **Open questions:** None.
 
 ### F-003 — Income and expense categories
 
 - **Status:** `Reference` + baseline subset of the category topic.
 - **Reference:** [How to enable sub-category](https://help.realbyteapps.com/hc/en-us/articles/360015963374-How-to-enable-sub-category).
-- **Baseline behavior:** A user can create, edit, delete, and list categories classified as income or expense. Categories are flat in the baseline; subcategories are deferred to F-020.
+- **Baseline behavior:** A user can create, edit, delete, and list categories classified as income or expense. Categories are flat in the baseline; subcategories are deferred to F-020. Per **D-006**, new profiles are seeded with six expense categories — Food, Transport, Wants, Rent, Bills, Necessities — and two income categories — Salary, Bonus. No accounts are seeded.
 - **Acceptance criteria:**
   - A category has a name and a type (`income` or `expense`), matching the guide's separate income/expense category management.
   - Income records can only use income categories; expense records can only use expense categories (integrity rule derived from the guide's separate category types).
-- **Open questions:** Q-003 (default categories), Q-007 (delete behavior for categories in use).
+  - A newly created profile contains exactly the eight seeded categories from D-006 and no seeded accounts.
+- **Decisions applied:** D-010 (hard delete; cannot delete a category still used by records).
+- **Open questions:** None.
 
 ### F-004 — Income and expense records
 
@@ -52,23 +58,25 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
   - Entry fields are date, account, category, and amount.
   - Account, category, and amount are mandatory.
   - Seller/retailer/store/recipient (payee) and note are optional; the guide says a payee is auto-filled if skipped.
-  - The reference app offers a "continue" button for consecutive entries and supports attaching pictures; both are outside the baseline (photos are F-015; continue-entry UX is `Proposed` only and must not be assumed).
+  - The reference app offers a "continue" button for consecutive entries and supports attaching pictures; neither is in Pocket Ledger (photos are out of scope per D-014; continue-entry UX is `Proposed` only and must not be assumed).
   - Saved records can be reviewed in the transaction tab and in the accounts tab.
   - The guide explicitly calls account, category, and amount mandatory; it lists date as an entry field. Requiring a date and requiring `amount > 0` are `Proposed` integrity rules, not explicit guide statements.
 - **Baseline behavior:** Create, edit, and delete income/expense records with the required fields above. Optional payee and note are supported. No photos, no recurring metadata, and no transfer type.
 - **Acceptance criteria:**
-  - Saving without account, category, or amount is rejected (guide-derived); date and amount-positivity validation follow the `Proposed` rules above and Q-002.
+  - Saving without account, category, or amount is rejected (guide-derived); date and amount-positivity validation follow the `Proposed` rules above and D-009 (local calendar date).
   - A saved record appears in the transaction history (F-005).
   - A record's type (`income`/`expense`) matches its category type.
-- **Open questions:** Q-001 (money representation), Q-002 (date semantics), Q-007 (delete semantics), Q-008 (balance effects).
+- **Decisions applied:** D-008 (`numeric(14,2)`), D-009 (local calendar date), D-010 (hard delete), D-011 (derived balance).
+- **Open questions:** None.
 
 ### F-005 — Transaction history
 
 - **Status:** `Reference` (review of records) with a deliberately minimal baseline presentation.
 - **Reference:** [Home tab](https://help.realbyteapps.com/hc/en-us/articles/360046150874-Home-tab) and the review section of [How to add an income & expense](https://help.realbyteapps.com/hc/en-us/articles/360042701994-How-to-add-an-income-expense).
-- **Baseline behavior:** A chronological list of the signed-in user's income and expense records, showing date, category, account, payee/note if present, and signed amount. Date grouping is `Proposed` and must follow the timezone decision Q-002.
+- **Baseline behavior:** A chronological list of the signed-in user's income and expense records, showing date, category, account, payee/note if present, and signed amount. Date grouping is `Proposed` and follows D-009 (user's local calendar day).
 - **Not in baseline:** calendar, weekly, monthly, and summary review views (F-014); search (F-009); filters (F-010).
-- **Open questions:** Q-002 (date semantics). Presentation follows the D-005 design tokens in [UI.md](./UI.md) §6.
+- **Decisions applied:** D-009 (date semantics), D-005 (design tokens in [UI.md](./UI.md) §6).
+- **Open questions:** None.
 
 ### F-006 — Single configurable currency
 
@@ -76,8 +84,9 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 - **Behavior:** Each user profile stores one currency. All amounts in lists, forms, and balances are displayed in that currency using locale-appropriate formatting. There is no conversion, no per-account currency, and no sub-currency feature.
 - **Acceptance criteria:**
   - A user can change the currency setting.
+  - `PHP` is available in the currency selector; `USD` remains the default (**D-017**).
   - Changing the setting does not alter stored amounts; it only changes display formatting.
-- **Open questions:** None for the behavior; source of the currency code list (e.g. ISO 4217) is `Proposed`.
+- **Open questions:** None. Phase 1 uses the fixed ISO-style list in `src/domain/currency.ts`, defaulting to `USD`; `PHP` was added by the owner and recorded as **D-017**.
 
 ### F-007 — PWA installability
 
@@ -87,6 +96,7 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
   - Manifest and icons are present and linked from the HTML entry point.
   - No feature relies on offline availability.
 - **Open questions:** None.
+- **Phase 1 implementation:** `vite-plugin-pwa` generates the manifest and a precache-only service worker for the application shell; no runtime user-data caching is configured.
 
 ### F-023 — Theme preference setting
 
@@ -100,6 +110,7 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
   - The saved theme is applied before first paint so there is no light-theme flash for dark-mode users.
 - **Dependencies:** `theme` column on `profiles` (see [DATABASE.md](./DATABASE.md)), theme provider in the app shell (see [ARCHITECTURE.md](./ARCHITECTURE.md)).
 - **Open questions:** None.
+- **Phase 1 implementation:** `src/app/ThemeProvider.tsx` caches the choice under `pocket-ledger-theme`; the inline script in `index.html` applies it before first paint.
 
 ## 3. Feature status matrix
 
@@ -120,7 +131,7 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 | F-012 | Budgets and carry-over | Deferred | Phase 4 |
 | F-013 | Statistics | Deferred | Phase 4 |
 | F-014 | Calendar/weekly/monthly/summary views | Deferred | Phase 4 |
-| F-015 | Receipt photos | Deferred | Phase 5 |
+| F-015 | Receipt photos | **Out of scope (D-014)** | — |
 | F-016 | Daily notes/memos | Deferred | Phase 5 |
 | F-017 | Recurring schedules and installments | Deferred | Phase 5 |
 | F-018 | Debit/credit cards and settlement | Deferred | Phase 5 |
@@ -169,11 +180,11 @@ Each entry records the documented reference behavior so a later session does not
 - **Reference:** [Home tab](https://help.realbyteapps.com/hc/en-us/articles/360046150874-Home-tab).
 - Documented behavior: calendar view with income/expense/balance and per-day entries; weekly and monthly comparisons; total view with budget status and asset-type breakdown.
 
-### F-015 — Receipt photos
+### F-015 — Receipt photos (removed from scope)
 
-- **Reference:** [How to insert receipts or photos](https://help.realbyteapps.com/hc/en-us/articles/360043267453-How-to-insert-receipts-or-photos) and the entry article linked in F-004.
-- Documented behavior: pictures such as receipts can be attached to expense records.
-- **Open question:** Q-005 (storage location).
+- **Status:** `Out of scope (D-014)` — not deferred, not planned. The ID is retained for stable cross-references.
+- Pocket Ledger has no photo or receipt attachment feature. Do not add photo UI, storage buckets, attachment tables, or photo fields to the record model.
+- The reference guide documents photo attachments, but that behavior is deliberately not adopted.
 
 ### F-016 — Daily notes/memos
 

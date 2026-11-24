@@ -1,7 +1,7 @@
 # Pocket Ledger — Product Definition
 
 > Last updated: 2026-11-24
-> Status: **Documentation only.** No application code, schema, or configuration has been created yet.
+> Status: **Phase 1 foundation implemented and sign-in verified.** Both profile migrations are applied, Supabase email confirmation is off, and email/password sign-up/sign-in work. Nickname is editable in Settings and PHP is supported as a display currency. Two-user RLS verification is still pending. No Phase 2 features exist.
 
 ## 1. Purpose of this document
 
@@ -58,10 +58,11 @@ These are inputs, not achievements: no scaffolding or deployment exists yet.
 ### Non-goals for the baseline
 
 - Full feature parity with Money Manager (see [FEATURES.md](./FEATURES.md) §4 for the deferred list).
-- Transfers, budgets, statistics, bookmarks, search/filters, recurring entries, installments, card billing cycles, notes, receipt photos, and bulk import/export.
+- Transfers, budgets, statistics, bookmarks, search/filters, recurring entries, installments, card billing cycles, notes, and bulk import/export.
 - Multi-currency support, currency conversion, or per-account currencies (**D-003**).
 - Offline data editing or multi-device sync logic (**D-004**).
 - Bank integrations, automated transaction feeds, ads, or in-app purchases.
+- Photos and receipts in any form are **out of product scope**, not merely deferred (**D-014**). Do not plan storage, UI, or schema for them.
 
 ## 6. Relationship to the reference application
 
@@ -96,17 +97,17 @@ Important differences to keep in mind:
 
 Included in the baseline:
 
-- Supabase email authentication and per-user data ownership (foundation prerequisite, **D-002**).
+- Supabase email/password authentication with a required nickname at registration, plus per-user data ownership (foundation prerequisite, **D-002**, **D-015**, **D-016**).
 - Accounts: create, edit, delete, list, with balance display.
-- Categories: income/expense categories; create, edit, delete, list.
+- Categories: income/expense categories; create, edit, delete, list. New profiles are seeded with six expense categories and two income categories (**D-006**); no accounts are seeded.
 - Income and expense records: create, edit, delete, and review in a history list.
-- Single configurable currency setting (**D-003**).
+- Single configurable currency setting; PHP is supported and USD remains the default (**D-003**, **D-017**).
 - Manual theme setting (light/dark, default light) using the Pocket Ledger design system (**D-005**).
 - Responsive layout and PWA installability only (**D-004**).
 
 Excluded from the baseline (tracked as deferred features in [FEATURES.md](./FEATURES.md)):
 
-- Transfers, bookmarks, budgets, statistics/reporting, search, filters, multi-period review views (calendar/weekly/monthly/summary), notes, receipt photos, recurring schedules, installments, card billing/settlement, account hiding/groups/exclusions, and import/export.
+- Transfers, bookmarks, budgets, statistics/reporting, search, filters, multi-period review views (calendar/weekly/monthly/summary), notes, recurring schedules, installments, card billing/settlement, account hiding/groups/exclusions, and import/export. Photos/receipts are out of scope entirely (**D-014**).
 
 ## 8. Decision register
 
@@ -119,22 +120,34 @@ Excluded from the baseline (tracked as deferred features in [FEATURES.md](./FEAT
 | D-003 | Currency | One configurable currency per user profile; locale formatting; no conversion. | DATABASE, UI, FEATURES |
 | D-004 | PWA scope | Installable only (manifest, icons, minimal service-worker handling for installability). No offline data strategy. | ARCHITECTURE, UI, ROADMAP |
 | D-005 | Visual design | Pocket Ledger's own design system: provisional rose-accented palette, Inter, Tailwind CSS v4 tokens, manual light/dark theme with light default. Replaces the earlier open question Q-004; not a copy of the reference app's style. | UI, ARCHITECTURE, DATABASE, FEATURES |
+| D-006 | Seed data | New profiles get six expense categories — Food, Transport, Wants, Rent, Bills, Necessities — and two income categories — Salary, Bonus. No accounts are seeded. Closes Q-003 and Q-011. | DATABASE, FEATURES, UI, ROADMAP |
+| D-007 | Supabase project | A Supabase project already exists, named `pocket-ledger`, in region `ap-northeast-2`. Vercel project does not exist yet; deployment setup is deferred. | ARCHITECTURE, DATABASE, ROADMAP |
+| D-008 | Money storage | `numeric(14,2)` for amounts; formatting and rounding live in `domain/`. Closes Q-001. | DATABASE, ARCHITECTURE |
+| D-009 | Dates and timezone | Store calendar `date`; interpret in the user's local timezone; local calendar boundaries for period logic. Closes Q-002. | DATABASE, UI, ROADMAP |
+| D-010 | Deletes | Hard delete with confirmation; restrict deleting an account/category that still has records; no soft delete in the baseline. Closes Q-007. | DATABASE, FEATURES, UI |
+| D-011 | Balances | `initial_amount` is the opening balance. Balance = opening + income − expense, recomputed after edits/deletes; not stored. Closes Q-008. | DATABASE, FEATURES, ARCHITECTURE |
+| D-012 | State/data fetching | TanStack Query for server data; local React state for forms. Closes Q-009. | ARCHITECTURE, ROADMAP |
+| D-013 | CI/branching | When Vercel exists: PR previews plus auto-deploy from `main`. Setup itself is deferred with Vercel. Closes Q-010. | ARCHITECTURE, ROADMAP |
+| D-014 | No photos | Pocket Ledger has no photo or receipt attachment feature at all. Closes Q-005; F-015 is out of scope, not deferred. | FEATURES, UI, ARCHITECTURE, DATABASE, ROADMAP |
+| D-015 | Auth mode | Supabase email + password. Email confirmation is off for now; magic links are removed. Forgot-password/reset is deferred, not built. | FEATURES, UI, ARCHITECTURE, DATABASE, ROADMAP, README |
+| D-016 | Nickname | A nickname of 1–30 characters is required at registration and can be changed in Settings; it cannot be blank. Stored on `profiles`, not shown in the header. | DATABASE, FEATURES, UI, ARCHITECTURE |
+| D-017 | Currency list | `PHP` (Philippine peso) is a supported display currency; `USD` remains the default. No currency conversion is added. | FEATURES, UI, ARCHITECTURE, DATABASE, ROADMAP, README |
 
-### Open questions requiring owner input
+### Open questions and deferred context
 
 | ID | Question | Why it matters | Impact area |
 | --- | --- | --- | --- |
-| Q-001 | How should money be stored — `numeric(14,2)` or integer minor units? | Determines schema type, validation, and rounding rules. | DATABASE |
-| Q-002 | Which timezone and date-boundary rules apply to transaction dates and month cutoffs? | Affects date storage type and every period-based view (even the baseline history ordering). | DATABASE, UI |
-| Q-003 | Should the app seed default accounts/categories, or start with empty lists? | Affects onboarding, migrations, and first-run UX. | DATABASE, UI |
-| Q-005 | If receipt photos are added later, where should files be stored? | Affects the future storage design; no baseline impact. | ARCHITECTURE, DATABASE |
-| Q-006 | What are the Supabase project, Vercel project, region, and environment names? | Needed before real credentials and deploy targets can be configured. | ARCHITECTURE, ROADMAP |
-| Q-007 | Should deletions be hard deletes or soft deletes, and how should deleted records affect balances/history? | Determines schema columns and destructive-action behavior. | DATABASE, FEATURES |
-| Q-008 | What exactly does the account's initial amount represent, and how are balances derived after edits/deletes? | The guide says an amount is entered when creating an account but does not define the accounting rule. | DATABASE, FEATURES |
-| Q-009 | Which frontend data-fetching/state approach should be used (e.g. TanStack Query, SWR, or custom hooks)? | Affects folder structure and dependency choices in Phase 1. | ARCHITECTURE |
-| Q-010 | What branch/CI strategy should Vercel use for previews and production? | Affects deployment configuration. | ARCHITECTURE, ROADMAP |
+| Q-006 *(deferred, non-blocking)* | At deployment time, choose Vercel project and environment names. | Supabase project name and region are already fixed by **D-007** (`pocket-ledger`, `ap-northeast-2`). No action is needed now; Vercel does not exist yet, and nothing in Phase 1 or 2 depends on these details. | ARCHITECTURE, ROADMAP |
 
-**Resolved:** Q-004 (visual fidelity/branding) is closed by **D-005**. The design is Pocket Ledger's own, not a reproduction of the reference app's style. The palette is provisional ("rose for now") and can be retuned by updating tokens without changing component structure.
+**Resolved / partially resolved:**
+
+- Q-004 (visual direction) is closed by **D-005**. The design is Pocket Ledger's own, not a reproduction of the reference app's style. The palette is provisional ("rose for now") and can be retuned by updating tokens without changing component structure.
+- Q-003 (seed data) is closed by **D-006**: six expense categories, two income categories, no accounts.
+- Q-011 (income-category seeding) is closed by **D-006**: Salary and Bonus.
+- Q-006 (project details) is partially closed by **D-007**: Supabase project is `pocket-ledger` in region `ap-northeast-2`. Only Vercel project/environment details remain, deferred because Vercel is not set up yet.
+- Q-001, Q-002, Q-007, Q-008, Q-009, and Q-010 are closed by **D-008–D-013**.
+- Q-005 is closed by **D-014**: photos/receipts are out of product scope entirely.
+- The remaining Vercel portion of Q-006 is deferred and non-blocking; it only matters when deployment is set up. All Phase 1 entry gates are resolved.
 
 ## 9. Glossary
 
@@ -143,7 +156,7 @@ Excluded from the baseline (tracked as deferred features in [FEATURES.md](./FEAT
 | Account | A user-defined place money is held (e.g. cash or bank). Money Manager groups accounts into categories such as Accounts, Cards, Savings; grouping is deferred here. |
 | Category | A label used to classify an income or expense record (e.g. groceries, salary). |
 | Transaction / record | In the baseline, an income or expense entry. The term "transfer" is reserved for the deferred own-account movement feature. |
-| Balance | A derived amount for an account, not a separately maintained ledger total. Exact rule: **Q-008**. |
+| Balance | A derived amount for an account, not a separately maintained ledger total. Exact rule: **D-011**. |
 | Baseline | The first release scope defined by **D-001**. |
 | Reference behavior | A behavior explicitly documented in the Money Manager user guide. |
 

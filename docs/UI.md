@@ -1,7 +1,7 @@
 # Pocket Ledger — UI and Interaction Design
 
 > Last updated: 2026-11-24
-> Status: **Documentation only.** Routes, layouts, and components below are proposals; no UI has been built.
+> Status: **Phase 1 UI implemented locally.** Sign-up (with nickname), sign-in, settings with nickname editing and PHP currency support, the app shell, and a temporary transactions placeholder exist. The baseline ledger screens in §3 remain unimplemented.
 
 ## 1. Purpose and constraints
 
@@ -18,11 +18,12 @@ Reference material for the overall structure is the [Home tab](https://help.real
 
 ## 2. Proposed information architecture
 
-Baseline navigation (all routes are `Proposed`; the routing library is not chosen):
+Baseline navigation (Phase 1 auth routes use React Router; later ledger routes remain `Proposed`):
 
 ```text
 / (signed out)
-└── /sign-in                     F-001  Supabase email sign-in
+├── /sign-in                     F-001  Supabase email + password sign-in
+└── /sign-up                     F-001  Create account with nickname
 
 / (signed in)
 ├── /transactions                F-005  transaction history (default landing screen)
@@ -37,6 +38,8 @@ Baseline navigation (all routes are `Proposed`; the routing library is not chose
 └── /settings                    F-006, F-023  currency and theme settings
 ```
 
+Phase 1 implements only `/sign-in`, `/sign-up`, `/transactions` (temporary placeholder), and `/settings`. The account and category routes above arrive in Phase 2.
+
 Notes:
 
 - A persistent primary navigation exposes only the baseline destinations above.
@@ -47,14 +50,15 @@ Notes:
 
 | Screen | Feature | Content | Status |
 | --- | --- | --- | --- |
-| Sign-in | F-001 | Email input, sign-in action, authentication feedback. | `Proposed` layout; `Decided` behavior (D-002) |
+| Sign-in | F-001 | Email and password inputs, sign-in action, link to sign-up, authentication feedback. | `Decided` behavior (D-002, D-015) |
+| Sign-up | F-001 | Nickname (1–30 chars), email, password, confirm password, link to sign-in. | `Decided` behavior (D-015, D-016) |
 | Transaction history | F-005 | List of income/expense records with date, category, account, optional payee/note, signed amount; entry point to create a record. | `Proposed` layout; `Reference` data source |
 | Record editor | F-004 | Date, account, category, amount (required); payee and note (optional); save and delete actions for existing records. | `Reference` fields; `Proposed` layout |
 | Account list | F-002 | Accounts with derived balances and links to add/edit. | `Proposed` layout; `Reference` concept |
 | Account editor | F-002 | Name and initial amount; edit and delete actions. | `Reference` fields (guide: name and amount); `Proposed` layout |
-| Category list | F-003 | Separate income and expense category lists. | `Reference` concept; `Proposed` layout |
+| Category list | F-003 | Separate income and expense category lists. New profiles show the eight seeded categories from D-006: expense — Food, Transport, Wants, Rent, Bills, Necessities; income — Salary, Bonus. | `Reference` concept; `Proposed` layout |
 | Category editor | F-003 | Name and type; edit and delete actions. | `Proposed` |
-| Settings | F-006, F-023 | Currency selector and light/dark theme choice (default light). | `Decided` behavior (D-003, D-005); `Proposed` layout |
+| Settings | F-001, F-006, F-023 | Nickname editor (required), currency selector including PHP, and light/dark theme choice (default light). | `Decided` behavior (D-003, D-005, D-016, D-017); `Proposed` layout |
 
 The reference app's "continue" button for consecutive entries and its daily memo button are documented but deferred; do not add them to the record editor in the baseline (see [FEATURES.md](./FEATURES.md) F-004, F-016).
 
@@ -62,15 +66,16 @@ The reference app's "continue" button for consecutive entries and its daily memo
 
 | Area | Rule | Basis |
 | --- | --- | --- |
-| Required fields | Record editor blocks save without account, category, and amount (guide-mandatory). Requiring a date and `amount > 0` are `Proposed` rules; date behavior detail is Q-002. | `Reference` + `Proposed` (F-004) |
+| Required fields | Record editor blocks save without account, category, and amount (guide-mandatory). Requiring a date and `amount > 0` are `Proposed` rules; date handling follows D-009. | `Reference` + `Proposed` (F-004) |
+| Nickname | Sign-up requires a 1–30 character nickname; Settings can change it but cannot set it to blank. No header display in this pass. | `Decided` (D-016) |
 | Type/category consistency | Income records offer income categories; expense records offer expense categories. | Derived from the guide's separate income/expense categories |
 | Currency display | All money uses the profile's single currency and locale formatting; changing it does not mutate stored values. | `Decided` (D-003) |
 | Destructive actions | Confirmation before delete, with accessible cancel/confirm labels. | `Proposed` (security/usability convention, not specified by the guide) |
 | Validation feedback | Field-level errors for missing/invalid required values; form-level error on save failure. | `Proposed` |
 | Async states | Loading, empty, and error states for every data list; empty states invite the first create action. | `Proposed` |
 | Auth states | Unauthenticated users are routed to sign-in; expired sessions prompt sign-in again without discarding unsaved input silently. | `Proposed` alongside `Decided` D-002 |
-| Date input | Transaction date is a calendar-day value; timezone/day-boundary rules are unresolved. | `Open` (Q-002) |
-| Record grouping/ordering | Chronological ordering, newest first; grouping by date is optional pending Q-002. | `Proposed` |
+| Date input | Transaction date is a calendar-day value interpreted in the user's local timezone; local calendar boundaries apply. | `Decided` (D-009) |
+| Record grouping/ordering | Chronological ordering, newest first; grouping by local calendar day is optional. | `Proposed` |
 | Theme preference | Manual light/dark choice in Settings; default light; persisted in profile and applied before first paint. | `Decided` (D-005, F-023) |
 
 ## 5. Responsive behavior
@@ -78,7 +83,7 @@ The reference app's "continue" button for consecutive entries and its daily memo
 - `Proposed`: mobile-first layout with a compact single-column form/list view; tablet and desktop widen content and may use side-by-side list/detail or a persistent sidebar.
 - `Proposed`: primary create action uses a prominent button (FAB-style on small screens) on list screens.
 - `Proposed`: navigation collapses to a bottom bar on small screens and a sidebar or top bar on larger screens.
-- Breakpoints, spacing, and component styling follow the **D-005** design system in §6. No component library is used in the baseline; the data-fetching/state choice remains **Q-009**.
+- Breakpoints, spacing, and component styling follow the **D-005** design system in §6. No component library is used in the baseline; server data uses **D-012** (TanStack Query) and local form state.
 
 ## 6. Design system (D-005)
 
@@ -150,7 +155,7 @@ Do not use raw palette classes (for example `text-rose-600`) in feature code; us
 
 ### 6.7 Tailwind implementation notes
 
-- Tailwind CSS v4, CSS-first configuration: define raw token variables on `:root` and `html.dark` in `src/styles/theme.css`, expose them to utilities with `@theme inline` (so dark-mode variable swaps work), and configure the `dark` variant to target `.dark` on `<html>`.
+- Tailwind CSS v4, CSS-first configuration: `src/styles/theme.css` defines raw `--pl-*` variables on `:root` and `html.dark`, exposes them as semantic `--color-*` variables with `@theme inline` (so dark-mode variable swaps work), and configures the `dark` variant to target `.dark` on `<html>`.
 - Use semantic utilities such as `bg-surface`, `text-muted`, `bg-income`, and `bg-expense` instead of raw color scales.
 - Extract repeated class combinations into `shared/` components (`Button`, `Input`, `Card`, `ListRow`, `SegmentedControl`) rather than duplicating long strings in feature screens.
 - No component library in the baseline. Headless accessibility primitives may be considered later if native controls are insufficient.
@@ -175,14 +180,10 @@ Any UI that promises offline access must be rejected until **D-004** is changed.
 
 ## 9. Deferred UI surface
 
-The following are documented in the guide but must not be built in the baseline: transfer form (F-008), search screen (F-009), filter panel (F-010), bookmark list (F-011), budget settings and progress bars (F-012), charts (F-013), calendar/weekly/monthly/summary views (F-014), note UI (F-016), photo attachments (F-015), repeat/installment controls (F-017), card billing fields and payment flow (F-018), account hide/order/group/exclude controls (F-019), and subcategory management (F-020).
+The following are documented in the guide but must not be built in the baseline: transfer form (F-008), search screen (F-009), filter panel (F-010), bookmark list (F-011), budget settings and progress bars (F-012), charts (F-013), calendar/weekly/monthly/summary views (F-014), note UI (F-016), repeat/installment controls (F-017), card billing fields and payment flow (F-018), account hide/order/group/exclude controls (F-019), and subcategory management (F-020). Photo/receipt UI (F-015) is out of product scope entirely per **D-014**, not merely deferred.
 
 ## 10. Open questions and AI handoff
 
-- **Q-002** — timezone/date boundaries affect date input, history grouping, and ordering.
-- **Q-003** — empty vs seeded accounts/categories changes first-run screens.
-- **Q-007/Q-008** — delete and balance rules affect account/record editor wording.
-
-Q-004 (visual direction) is resolved by **D-005** and §6. The palette is provisional; retune token values there rather than scattering color changes across components.
+There are no open UI questions for the baseline. Resolved: Q-004 by **D-005** (palette is provisional), Q-002 by **D-009** (local calendar dates), Q-007 by **D-010** (hard delete with confirmation), Q-008 by **D-011** (derived balances). Auth UI is fixed by **D-015**, nickname editing by **D-016**, and PHP currency support with USD default by **D-017**.
 
 When implementing a baseline screen: keep the route and component names in sync with this document and [FEATURES.md](./FEATURES.md), use the D-005 design tokens, and do not introduce a screen for a deferred feature.
