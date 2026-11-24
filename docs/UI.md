@@ -1,7 +1,7 @@
 # Pocket Ledger — UI and Interaction Design
 
 > Last updated: 2026-11-24
-> Status: **Phase 1 UI implemented locally.** Sign-up (with nickname), sign-in, settings with nickname editing and PHP currency support, the app shell, and a temporary transactions placeholder exist. The baseline ledger screens in §3 remain unimplemented.
+> Status: **Phase 1 and Phase 2 UI complete and verified.** Accounts, categories, record editor, and transaction history exist alongside auth and settings, and were smoke-tested in a production build with a live Supabase user.
 
 ## 1. Purpose and constraints
 
@@ -38,7 +38,7 @@ Baseline navigation (Phase 1 auth routes use React Router; later ledger routes r
 └── /settings                    F-006, F-023  currency and theme settings
 ```
 
-Phase 1 implements only `/sign-in`, `/sign-up`, `/transactions` (temporary placeholder), and `/settings`. The account and category routes above arrive in Phase 2.
+Phase 1 implemented `/sign-in`, `/sign-up`, a temporary `/transactions` placeholder, and `/settings`. Phase 2 replaced the placeholder with the real history and record routes and added all account and category routes listed above.
 
 Notes:
 

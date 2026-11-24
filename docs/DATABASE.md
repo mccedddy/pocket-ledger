@@ -1,7 +1,7 @@
 # Pocket Ledger — Database Design
 
 > Last updated: 2026-11-24
-> Status: **Phase 1 profile schema applied.** `supabase/migrations/0001_profiles.sql` defines `profiles` and its RLS/triggers; an anonymous REST read returns `200 []`. `supabase/migrations/0002_profile_nickname.sql` is also applied; nickname is editable in Settings. PHP is supported as a display currency with USD default. Two-user RLS verification is still pending. No Phase 2 tables or seed data exist.
+> Status: **Phase 1 and Phase 2 schema applied and verified.** `0001_profiles.sql`, `0002_profile_nickname.sql`, and `0003_core_ledger.sql` are applied. The Phase 2 tables, indexes, RLS policies, eight D-006 seed categories, and backfill for existing profiles were verified with two test users.
 
 ## 1. Purpose and governing decisions
 
@@ -40,7 +40,7 @@ auth.users
 
 Baseline tables: `profiles`, `accounts`, `categories`, `transactions`. Deferred features are **not** represented by tables in the baseline (see §8).
 
-## 3. Baseline tables (proposed)
+## 3. Baseline tables (applied)
 
 ### `profiles`
 
@@ -110,7 +110,7 @@ Composite foreign keys (proposed):
 
 `on delete` behavior is **D-010**: hard deletes with confirmation; use `on delete restrict` so an account or category still referenced by records cannot be deleted. Do not silently cascade transactions.
 
-## 4. Indexes (proposed)
+## 4. Indexes (applied)
 
 ```sql
 create index transactions_user_occurred_idx
@@ -127,7 +127,7 @@ create index categories_user_type_sort_idx
 
 These support the baseline history list (F-005) and category/account pickers. Add indexes for deferred features only when those features are approved.
 
-## 5. Row-level security (proposed)
+## 5. Row-level security (applied)
 
 Enable RLS on `profiles`, `accounts`, `categories`, and `transactions`. No privileged role access from the client.
 
@@ -145,23 +145,24 @@ create policy "accounts_all_own" on accounts
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 ```
 
-The `profiles` policies above are applied in Supabase; an anonymous REST read returned no rows as expected. Apply the equivalent `for all` policy to `categories` and `transactions` in Phase 2. RLS is the security boundary; client-side filtering is not sufficient. Verify isolation with two distinct test users before Phase 2 completion.
+The `profiles` policies above are applied in Supabase; an anonymous REST read returned no rows as expected, and two-user verification passed for reads, updates, and inserts. The equivalent `for all` policy is applied to `accounts`, `categories`, and `transactions`; two-user verification passed on all three tables (cross-user reads/updates/deletes affect no rows, cross-user inserts return 403). RLS is the security boundary; client-side filtering is not sufficient.
 
 ## 6. Derived balances and money rules
 
 - The guide says an amount is entered when an account is created, but does not define how that amount interacts with later transactions. **D-011** resolves this: `initial_amount` is the opening balance.
 - An account's displayed balance is derived, not stored: `initial_amount + sum(income) - sum(expense)` for that account. Recompute after record edits/deletes per **D-011**.
-- Whether balances are computed in SQL (view/RPC) or in the data layer is `Proposed` and follows [ARCHITECTURE.md](./ARCHITECTURE.md) §5.
+- Balances are computed in the client data layer using `domain/balance.ts` and cached by TanStack Query; no SQL view or RPC is used. This follows [ARCHITECTURE.md](./ARCHITECTURE.md) §5.
 - Money arithmetic and rounding are centralized in `domain/` helpers; the storage type is **D-008**.
 - Currency is display-only per **D-003**; no currency column belongs on accounts or transactions.
 
 ## 7. Migrations and seed data
 
-- `Proposed`: SQL migrations live in `supabase/migrations/`; TypeScript database types are generated from the schema and kept in the data layer.
+- SQL migrations live in `supabase/migrations/`; TypeScript database types are hand-maintained in `src/data/database.types.ts` and extended alongside each migration.
 - The first migration, `supabase/migrations/0001_profiles.sql`, has been applied in Supabase. An anonymous REST read of `profiles` returned `200 []`, confirming the table exists and RLS returns no rows. All schema-blocking questions are resolved (D-008–D-011).
 - The second migration, `supabase/migrations/0002_profile_nickname.sql`, adds `nickname` and updates the profile trigger. It has been applied in Supabase, so Settings can read and update `profiles.nickname` immediately.
+- The third migration, `supabase/migrations/0003_core_ledger.sql`, creates `accounts`, `categories`, and `transactions` with composite foreign keys enforcing ownership and category type, `on delete restrict`, indexes, `for all` RLS policies, and `updated_at` triggers. It has been applied and verified live.
 - Seed data (**D-006**): new profiles receive exactly eight categories — **expense**: `Food`, `Transport`, `Wants`, `Rent`, `Bills`, `Necessities`; **income**: `Salary`, `Bonus`. No accounts are seeded.
-- The existing `Proposed` profile-creation trigger (see §3) is the natural place to insert the seed rows, or a dedicated function can be called from the signup flow; choose during Phase 1.
+- Seed rows are inserted by `public.seed_categories(uuid)`, called from the `on_auth_user_created` trigger for new profiles and from a one-time backfill loop for profiles created in Phase 1. Both paths were verified: each test user has exactly the eight D-006 categories.
 - Project note (**D-007**): the Supabase project is named `pocket-ledger` and uses region `ap-northeast-2`. Vercel is not set up yet; no Vercel-specific schema or config exists.
 
 ## 8. Deferred data model outlines (do not create in the baseline)

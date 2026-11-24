@@ -2,7 +2,7 @@
 
 A responsive, installable personal finance web app built with React, TypeScript, Vite, Tailwind CSS v4, and Supabase.
 
-> Current phase: **Phase 1 — Foundation**. Authentication, profile settings, theming, currency display, and PWA installability are scaffolded. The ledger screens (accounts, categories, records, history) are Phase 2 and are intentionally not implemented yet.
+> Current phase: **Phase 2 — Core ledger complete and verified**. Accounts, categories, income/expense records, derived balances, and transaction history are implemented and verified against Supabase with two test users. Phase 1 foundation work is also complete.
 
 ## Prerequisites
 
@@ -29,11 +29,12 @@ A responsive, installable personal finance web app built with React, TypeScript,
    - `VITE_APP_NAME` — optional; if blank, the app uses "Pocket Ledger".
    - Never put a `service_role` key in `.env.local` or any client-side file.
 
-3. Apply the profile migrations:
+3. Apply the migrations in order:
 
    - Open the Supabase SQL editor for `pocket-ledger`.
    - Run `supabase/migrations/0001_profiles.sql`. This creates the `profiles` table, RLS policies, profile-creation trigger, and `updated_at` trigger.
-   - Run `supabase/migrations/0002_profile_nickname.sql`. This adds the required `nickname` column, backfills existing rows, and updates the auth trigger. No other tables exist yet.
+   - Run `supabase/migrations/0002_profile_nickname.sql`. This adds the required `nickname` column, backfills existing rows, and updates the auth trigger.
+   - Run `supabase/migrations/0003_core_ledger.sql`. This creates `accounts`, `categories`, and `transactions` with indexes, RLS policies, seed categories, and a backfill for existing profiles.
 
 4. Configure Supabase Auth:
 

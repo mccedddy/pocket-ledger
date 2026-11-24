@@ -1,7 +1,7 @@
 # Pocket Ledger — Architecture
 
 > Last updated: 2026-11-24
-> Status: **Phase 1 implemented and sign-in verified.** The structure below is the current baseline; Phase 2 modules remain proposals.
+> Status: **Phase 1 and Phase 2 complete and verified.** The structure below is the current baseline, including the Phase 2 ledger modules and applied migration.
 
 ## 1. Purpose and current state
 
@@ -59,7 +59,7 @@ src/
   features/
     auth/              # SignInPage, SignUpPage, AuthProvider, session hook, error helpers
     settings/          # SettingsPage and profile query/mutation hooks
-    transactions/      # Phase 1 placeholder only; F-004/F-005 arrive in Phase 2
+    transactions/      # history, record editor, and query hooks (F-004/F-005)
   domain/              # pure helpers; currency.ts and validation.ts implemented in Phase 1
   data/                # Supabase client, hand-maintained DB types, profile repository
   shared/              # Button, Field, Input, Select, Card, PageHeader, FullPageState
@@ -69,7 +69,7 @@ supabase/migrations/   # 0001_profiles.sql and 0002_profile_nickname.sql applied
 scripts/               # icon generation helper (not part of the npm build)
 ```
 
-Phase 2 will add `features/accounts/`, `features/categories/`, and the real `features/transactions/` screens, plus the remaining migrations. Deferred features get their own `features/<name>/` module only when approved.
+Phase 2 added `features/accounts/`, `features/categories/`, the real `features/transactions/` screens, and `supabase/migrations/0003_core_ledger.sql`. Deferred features get their own `features/<name>/` module only when approved.
 
 ## 5. Layer responsibilities
 
@@ -84,7 +84,7 @@ Phase 2 will add `features/accounts/`, `features/categories/`, and the real `fea
 
 - Pure functions only: currency formatting (**D-003**), money arithmetic (**D-008**), date handling (**D-009**), and balance derivation (**D-011**).
 - No direct database or React dependencies, so these rules can be unit-tested.
-- Phase 1 implements `domain/currency.ts` only; date and balance helpers arrive with Phase 2.
+- Phase 1 implemented `domain/currency.ts`; Phase 2 added `date.ts`, `money.ts`, and `balance.ts`.
 - Do not implement transfer, budget, installment, or card-cycle math in the baseline.
 
 ### Data access (`data/`)
@@ -145,15 +145,14 @@ Per **D-007**, the Supabase project exists, is named `pocket-ledger`, and is hos
 
 Vitest and Testing Library are installed. Current coverage:
 
-- **Unit tests** for `domain/currency.ts` (`src/domain/currency.test.ts`) and `domain/validation.ts` (`src/domain/validation.test.ts`).
-- **Component tests** for the shared `Button` (`src/shared/Button.test.tsx`), the sign-in/sign-up forms (`src/features/auth/authPages.test.tsx`), and Settings nickname editing (`src/features/settings/SettingsPage.test.tsx`), including nickname validation and mutation arguments.
+- **Unit tests** for `domain/currency.ts`, `domain/validation.ts`, `domain/money.ts`, `domain/date.ts`, and `domain/balance.ts`.
+- **Component tests** for the shared `Button` (`src/shared/Button.test.tsx`), the sign-in/sign-up forms (`src/features/auth/authPages.test.tsx`), and Settings nickname editing (`src/features/settings/SettingsPage.test.tsx`), including nickname validation and mutation arguments, and AppShell sign-out (`src/app/AppShell.test.tsx`). Phase 2 adds component tests for the Accounts list empty/error/balance states (`src/features/accounts/AccountsPage.test.tsx`) and record-form validation and type-filtered categories (`src/features/transactions/TransactionFormPage.test.tsx`).
 
 Still to add as features land:
 
-- Unit tests for future `domain/` date and balance helpers.
-- Component tests for list empty/error states in Phase 2.
-- End-to-end tests for baseline flows: sign up with nickname, sign in, sign out, create account, create category, add income/expense, verify history and balance, edit/delete, change currency.
-- Supabase RLS verification with distinct test users (anonymous read already confirmed `200 []`; two-user isolation still pending).
+- Automated end-to-end tests for baseline flows: sign up with nickname, sign in, sign out, create account, create category, add income/expense, verify history and balance, edit/delete, change currency.
+- Supabase RLS verification with distinct test users (completed: anonymous read returned `200 []`; two-user isolation passed read, update, and insert checks on `profiles`, `accounts`, `categories`, and `transactions`).
+- Live Phase 2 verification (completed): D-006 seeds for both users, category-type enforcement, derived balance D-011, chronology, restrict deletes, and a production-build browser smoke test of create account → create record → history → balance update.
 
 ## 11. Deferred architecture concerns
 
@@ -169,4 +168,4 @@ These need dedicated design work when their features are approved:
 
 No open questions block architecture work. Supabase name and region are fixed by **D-007**; only the Vercel portion of Q-006 is deferred until deployment. Money, dates, deletes, balances, state, CI, and the no-photos rule are settled by D-008–D-014.
 
-Before writing more application code, read [FEATURES.md](./FEATURES.md) for the baseline boundary and [ROADMAP.md](./ROADMAP.md) for the current phase. Phase 2 should extend the existing folders rather than re-scaffold. Both profile migrations are applied, Supabase email confirmation is off, and sign-in is verified. Next sign up/sign in with a second test user and confirm RLS isolation. Do not introduce deferred architecture (offline sync, file storage, schedulers) into the baseline.
+Before writing more application code, read [FEATURES.md](./FEATURES.md) for the baseline boundary and [ROADMAP.md](./ROADMAP.md) for the current phase. All three migrations are applied, Supabase email confirmation is off, and sign-in/out plus two-user RLS isolation are verified for both profile and ledger tables. Do not introduce deferred architecture (offline sync, file storage, schedulers) into the baseline.

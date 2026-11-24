@@ -1,8 +1,7 @@
-/**
- * Hand-maintained types for the Phase 1 schema (profiles only).
- * Regenerate/extend this when Phase 2 migrations are added.
- */
+/** Hand-maintained types for the Phase 1 + Phase 2 schema. */
+
 export type ThemeValue = 'light' | 'dark'
+export type LedgerType = 'income' | 'expense'
 
 export interface Database {
   public: {
@@ -28,6 +27,99 @@ export interface Database {
           nickname?: string
           currency_code?: string
           theme?: ThemeValue
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      accounts: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          initial_amount: number
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          initial_amount?: number
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          initial_amount?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          type: LedgerType
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          type: LedgerType
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          type?: LedgerType
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          id: string
+          user_id: string
+          type: LedgerType
+          occurred_on: string
+          account_id: string
+          category_id: string
+          amount: number
+          payee: string | null
+          note: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: LedgerType
+          occurred_on: string
+          account_id: string
+          category_id: string
+          amount: number
+          payee?: string | null
+          note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          type?: LedgerType
+          occurred_on?: string
+          account_id?: string
+          category_id?: string
+          amount?: number
+          payee?: string | null
+          note?: string | null
           updated_at?: string
         }
         Relationships: []

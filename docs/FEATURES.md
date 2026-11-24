@@ -1,7 +1,7 @@
 # Pocket Ledger — Feature Inventory
 
 > Last updated: 2026-11-24
-> Status: **Phase 1 features F-001, F-006, F-007, and F-023 are implemented locally.** Email/password sign-up and sign-in are verified; nickname is editable in Settings, and PHP is supported as a display currency. Phase 2 features remain unimplemented; deferred items are still only requirements.
+> Status: **Phase 1 features complete and verified; Phase 2 features F-002–F-005 complete and verified.** Seed categories, RLS isolation, type consistency, derived balances, and CRUD were verified live with two test users. Deferred items are still only requirements.
 
 ## 1. Scope
 

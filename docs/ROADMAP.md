@@ -1,7 +1,7 @@
 # Pocket Ledger — Roadmap
 
 > Last updated: 2026-11-24
-> Status: **Phase 1 implemented and sign-in verified.** Nickname editing and PHP currency support are in Settings; only two-user RLS verification remains. No Phase 2 features have been implemented.
+> Status: **Phase 1 and Phase 2 complete and verified.** Nickname, currency, and theme persistence, two-user RLS isolation, sign-out, and PWA asset checks pass. Phase 2 accounts, categories, records, history, derived balances, seeds, and RLS were verified live with two test users and in a production-build browser smoke test.
 
 ## 1. How to use this roadmap
 
@@ -14,8 +14,8 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 | Phase | Name | Features | Status |
 | --- | --- | --- | --- |
 | 0 | Documentation and decisions | This document set | Complete |
-| 1 | Foundation | F-001, F-006, F-007, F-023 | Implemented; both migrations applied, sign-in verified, two-user RLS pending |
-| 2 | Core ledger (baseline) | F-002, F-003, F-004, F-005 | Not started |
+| 1 | Foundation | F-001, F-006, F-007, F-023 | Complete; migrations applied, sign-in/out and two-user RLS verified, PWA assets checked |
+| 2 | Core ledger (baseline) | F-002, F-003, F-004, F-005 | Complete; migration applied, seeds, RLS, balances, and CRUD verified |
 | 3 | Transaction usability | F-008, F-009, F-010, F-011 | Deferred |
 | 4 | Planning and insights | F-012, F-013, F-014 | Deferred |
 | 5 | Advanced features | F-016–F-021 | Deferred (F-015 out of scope) |
@@ -47,24 +47,24 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 6. Add PWA manifest, icons, and minimal registration (F-007).
 7. Prepare a Vercel-ready production build configuration and document local/Supabase environment variables without committing secrets. Do **not** create a Vercel project; deployment setup is deferred per **D-007** and Q-006. Use D-013 when deployment begins.
 
-**Implementation notes (this session):** React + TypeScript + Vite, Tailwind CSS v4, TanStack Query, React Router, Supabase JS, and `vite-plugin-pwa` are installed. Source lives under `src/app`, `src/features`, `src/domain`, `src/data`, and `src/shared`. Both profile migrations are applied. Auth is email + password: `/sign-up` collects nickname, email, password, and confirmation; `/sign-in` collects email and password; magic links and `/auth/callback` are removed. Supabase email confirmation is off, and sign-in has been verified. Settings can change the required nickname and offers PHP in the currency selector while keeping USD default (**D-017**). The transactions route is a temporary placeholder for Phase 2. `.env.example`, `vercel.json`, PWA icons, and unit/component tests were added. Local lint, typecheck, tests, and production build pass. The environment is configured with `VITE_SUPABASE_PUBLISHABLE_KEY`; an anonymous REST read of `profiles` returned `200 []`, confirming RLS hides rows. Two-user RLS verification remains.
+**Implementation notes (this session):** React + TypeScript + Vite, Tailwind CSS v4, TanStack Query, React Router, Supabase JS, and `vite-plugin-pwa` are installed. Source lives under `src/app`, `src/features`, `src/domain`, `src/data`, and `src/shared`. Both profile migrations are applied. Auth is email + password: `/sign-up` collects nickname, email, password, and confirmation; `/sign-in` collects email and password; magic links and `/auth/callback` are removed. Supabase email confirmation is off, and sign-in has been verified. Settings can change the required nickname and offers PHP in the currency selector while keeping USD default (**D-017**). `.env.example`, `vercel.json`, PWA icons, and unit/component tests were added. Local lint, typecheck, tests, and production build pass. The environment is configured with `VITE_SUPABASE_PUBLISHABLE_KEY`; an anonymous REST read of `profiles` returned `200 []`, confirming RLS hides rows. Two-user RLS isolation was verified with distinct test users: each could read only their own profile, cross-user updates affected no rows, and cross-user profile inserts returned 403. Nickname, currency (PHP), and theme updates were confirmed to persist via the API. A sign-out component test and a production-preview check of the manifest, icons, and service worker pass.
 
 **Exit criteria:**
 
-- A user can sign up with a nickname, sign in, and sign out; unauthenticated access to protected routes is blocked. *(Sign-up/sign-in verified; sign-out and two-user RLS verification pending.)*
-- A user can change the nickname in Settings and cannot save it blank. *(Code complete; Supabase verification pending.)*
+- A user can sign up with a nickname, sign in, and sign out; unauthenticated access to protected routes is blocked. *(Verified: sign-up, sign-in, sign-out, route guard, and two-user RLS.)*
+- A user can change the nickname in Settings and cannot save it blank. *(Verified via API with a test user.)*
 - The currency selector includes PHP and USD remains the default. *(Verified locally.)*
-- RLS denies access to another user's profile. *(Anonymous read verified; two-user check pending.)*
-- The currency setting persists and formats display values without mutating amounts. *(Code complete; Supabase verification pending.)*
-- A new profile defaults to light; switching to dark persists, uses D-005 tokens, and does not flash light on reload. *(Code complete and pre-paint token script added; Supabase verification pending.)*
-- The app is installable as a PWA with no offline-data behavior. *(Manifest and minimal service worker generated; browser install check pending.)*
+- RLS denies access to another user's profile. *(Anonymous read and two-user check verified.)*
+- The currency setting persists and formats display values without mutating amounts. *(Verified via API with a test user.)*
+- A new profile defaults to light; switching to dark persists, uses D-005 tokens, and does not flash light on reload. *(Code complete, pre-paint token script added, and dark-mode persistence verified via API.)*
+- The app is installable as a PWA with no offline-data behavior. *(Manifest, icons, service worker, and registration script generated and served from the production preview; install prompt not clicked.)*
 - The production build succeeds locally; no secret keys are committed. **Verified.** Vercel deployment success is not a Phase 1 exit criterion because no Vercel project exists yet.
 
 ## 5. Phase 2 — Core ledger (baseline completion)
 
 **Scope:** F-002 accounts, F-003 categories, F-004 income/expense records, F-005 transaction history.
 
-**Entry gates:** Phase 1 exit criteria, including two-user RLS verification; D-006 seed migration verified during Phase 2; visual design follows D-005 and needs no further decision. Photos are out of scope per **D-014**.
+**Entry gates:** Phase 1 exit criteria were satisfied, including two-user RLS verification; the D-006 seed migration was verified during Phase 2; visual design follows D-005 and needed no further decision. Photos are out of scope per **D-014**.
 
 **Work items:**
 
@@ -75,13 +75,15 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 5. Build chronological transaction history with empty/loading/error states (F-005).
 6. Add tests for domain helpers, form validation, and RLS isolation.
 
+**Implementation notes (Phase 2):** `supabase/migrations/0003_core_ledger.sql` adds the three baseline tables, composite foreign keys, indexes, `for all` RLS policies, `updated_at` triggers, and `public.seed_categories(uuid)` used by both the signup trigger and a one-time backfill for Phase 1 profiles. Balances are derived client-side in `domain/balance.ts` from the cached transactions, so no balance column or SQL view exists. New modules: `features/accounts/`, `features/categories/`, a real `features/transactions/`, plus `domain/date.ts`, `domain/money.ts`, `domain/balance.ts` and per-table repositories/hooks. Deletes use confirmation plus database `on delete restrict`; category type is fixed on edit. Typecheck, lint, 35 tests, and the production build pass. Live verification with two test users passed 20 checks covering seeds, RLS, type enforcement, chronology, balances, edits, deletes, and restrict behavior; a production-build browser smoke test covered create account → create record → history → balance update.
+
 **Exit criteria:**
 
-- A signed-in user can create, edit, and delete accounts, categories, and income/expense records.
-- Required-field and category-type validation prevents invalid records.
-- A saved record appears in history and in the relevant account's balance calculation (rule **D-011**).
-- A second user cannot read or modify the first user's rows.
-- No deferred feature (transfers, filters, budgets, stats, recurring, cards) has been implemented, and no photo/receipt UI or storage exists (**D-014**).
+- A signed-in user can create, edit, and delete accounts, categories, and income/expense records. *(Verified live and in the browser smoke test.)*
+- Required-field and category-type validation prevents invalid records. *(Verified by component tests and a rejected income/expense-category insert, status 409.)*
+- A saved record appears in history and in the relevant account's balance calculation (rule **D-011**). *(Verified live: 100 + 50.25 − 20.15 = 130.10; browser: 250 − 40 = 210.)*
+- A second user cannot read or modify the first user's rows. *(Verified on all three new tables: cross-user reads/updates/deletes affect no rows; inserts return 403.)*
+- No deferred feature (transfers, filters, budgets, stats, recurring, cards) has been implemented, and no photo/receipt UI or storage exists (**D-014**). *(Confirmed in code review.)*
 
 ## 6. Phase 3 — Transaction usability (deferred)
 

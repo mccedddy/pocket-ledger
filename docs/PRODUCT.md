@@ -1,7 +1,7 @@
 # Pocket Ledger — Product Definition
 
 > Last updated: 2026-11-24
-> Status: **Phase 1 foundation implemented and sign-in verified.** Both profile migrations are applied, Supabase email confirmation is off, and email/password sign-up/sign-in work. Nickname is editable in Settings and PHP is supported as a display currency. Two-user RLS verification is still pending. No Phase 2 features exist.
+> Status: **Phase 2 core ledger complete and verified.** Phase 1 is complete, including two-user RLS isolation. F-002 accounts, F-003 categories, F-004 records, and F-005 history are implemented; the Phase 2 migration is applied, seed categories are verified, and RLS isolation plus CRUD/balance behavior passed live checks with two test users.
 
 ## 1. Purpose of this document
 
