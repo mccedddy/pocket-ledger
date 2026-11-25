@@ -1,7 +1,7 @@
 # Pocket Ledger — Database Design
 
 > Last updated: 2026-11-25
-> Status: **D-019 unified ledger approved; migration applied and verified.** `0001_profiles.sql`, `0002_profile_nickname.sql`, `0003_core_ledger.sql`, and `0004_transaction_time_and_transfers.sql` are applied. `0005_unified_transactions.sql` is applied: it extends `transactions.type` to `income | expense | transfer`, copies existing transfer rows into `transactions`, and retires the `transfers` table.
+> Status: **D-019 unified ledger verified; D-020 balance correction approved; migration `0006_balance_correction.sql` authored and awaiting application.** `0001`–`0005` are applied and verified. `0006` updates seed categories to include `Difference` for both income and expense and backfills existing profiles; no schema columns are added.
 
 ## 1. Purpose and governing decisions
 
@@ -22,6 +22,7 @@ Governing items:
 - **D-017** — `PHP` is a supported display currency; `USD` remains the default.
 - **D-018** — superseded: transfers originally had a separate table. The fee-as-source-expense balance rule is retained.
 - **D-019** — one `transactions` table stores Expense, Income, and Transfer rows; no separate `transfers` table.
+- **D-020** — account balance correction either logs a type-specific `Difference` transaction with note `Modified balance`, or adjusts `initial_amount` by the difference so the derived final balance matches the user's entered final balance; the entered final balance is never stored as `initial_amount`. Seed categories gain `Difference` for both income and expense.
 
 ## 2. Proposed entity relationships
 
@@ -198,7 +199,8 @@ The `profiles` policies are applied; an anonymous REST read returned no rows, an
 - `0003_core_ledger.sql` (applied and verified live) creates `accounts`, `categories`, and `transactions` with composite foreign keys enforcing ownership and category type, `on delete restrict`, indexes, `for all` RLS policies, `updated_at` triggers, and seed categories.
 - `0004_transaction_time_and_transfers.sql` (applied and verified live) renames `transactions.occurred_on` to `occurred_at timestamp` and creates the old `transfers` table.
 - `0005_unified_transactions.sql` (**applied and verified**) extends `transactions.type` to include `transfer`, adds `to_account_id` and `fee_amount`, makes `category_id` nullable, adds type-specific checks/composite FKs, copies existing transfer rows into `transactions`, and drops the `transfers` table.
-- Seed data (**D-006**): new profiles receive exactly eight categories — **expense**: `Food`, `Transport`, `Wants`, `Rent`, `Bills`, `Necessities`; **income**: `Salary`, `Bonus`. No accounts or transactions are seeded.
+- `0006_balance_correction.sql` (**authored, awaiting application**) replaces `public.seed_categories(uuid)` to include `Difference` for income and expense, and backfills both categories for every existing profile. No table or column changes are made.
+- Seed data (**D-006**, amended by **D-020**): new profiles receive exactly ten categories — **expense**: `Food`, `Transport`, `Wants`, `Rent`, `Bills`, `Necessities`, `Difference`; **income**: `Salary`, `Bonus`, `Difference`. No accounts or transactions are seeded.
 - Seed rows are inserted by `public.seed_categories(uuid)`, called from the `on_auth_user_created` trigger for new profiles and from a one-time backfill loop for Phase 1 profiles; both paths were verified.
 - Project note (**D-007**): the Supabase project is named `pocket-ledger` and uses region `ap-northeast-2`. Vercel is not set up yet; no Vercel-specific schema or config exists.
 
@@ -219,6 +221,6 @@ These are notes for later sessions, not current schema:
 
 ## 9. Open questions and AI handoff
 
-All schema decisions are resolved: D-008–D-011 cover money, amended dates, deletes, and balances; D-006 covers seed data; D-014 rules out any photo/attachment design; D-015/D-016 cover the password-auth mode and required nickname; D-017 covers PHP support with USD default; D-019 approves the unified three-type transaction table and supersedes D-018's separate table. The remaining Vercel portion of Q-006 is deferred and non-blocking; Supabase name and region are fixed by **D-007**.
+All schema decisions are resolved: D-008–D-011 cover money, amended dates, deletes, and balances; D-006 as amended by D-020 covers seed data; D-014 rules out any photo/attachment design; D-015/D-016 cover the password-auth mode and required nickname; D-017 covers PHP support with USD default; D-019 approves the unified three-type transaction table and supersedes D-018's separate table; D-020 adds correction seed categories without new columns. The remaining Vercel portion of Q-006 is deferred and non-blocking; Supabase name and region are fixed by **D-007**.
 
 When implementing, keep table and column names aligned with this document and update it if the schema changes. Do not create deferred tables "just in case".

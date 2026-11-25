@@ -1,7 +1,7 @@
 # Pocket Ledger — UI and Interaction Design
 
 > Last updated: 2026-11-25
-> Status: **D-019 approved; migration `0005_unified_transactions.sql` applied and verified.** The record screen handles Expense, Income, and Transfer with type-specific fields; the history is headerless, grouped by local day with signed totals and compact rows. The separate `/transfers` routes are removed. The refined layout was smoke-tested in the production build.
+> Status: **D-019 verified; D-020 approved; migration `0006_balance_correction.sql` authored and awaiting application.** The record screen handles Expense, Income, and Transfer with type-specific fields; the history is headerless, grouped by local day with signed totals and compact rows. The account editor now includes a balance-correction flow.
 
 ## 1. Purpose and constraints
 
@@ -56,8 +56,8 @@ Notes:
 | Transaction history | F-005 | Headerless chronology grouped by local day. Each day starts with a date and signed income/expense totals shown as amounts only. Record rows have a fixed height and show only category, note, and signed amount; the account is secondary text under the note, and the transfer fee is secondary under the amount. Long note/account text is truncated rather than wrapped. Transfer rows show Category `Transfer`. Record time is not displayed in the history. Clicking or keyboard-activating a row opens that record in the editor; there are no table action buttons. Entry point to create a record. | `Proposed` layout; `Reference` data source |
 | Record editor | F-004 | Type selector (Expense, Income, Transfer) plus shared date/time, amount, and note. Income/expense add account, category, and optional payee; transfer adds source account, destination account, and optional fee. Save and delete actions for existing records. | `Reference` fields; `Proposed` layout (D-019) |
 | Account list | F-002 | Accounts with derived balances and links to add/edit. | `Proposed` layout; `Reference` concept |
-| Account editor | F-002 | Name and initial amount; edit and delete actions. | `Reference` fields (guide: name and amount); `Proposed` layout |
-| Category list | F-003 | Separate income and expense category lists. New profiles show the eight seeded categories from D-006: expense — Food, Transport, Wants, Rent, Bills, Necessities; income — Salary, Bonus. | `Reference` concept; `Proposed` layout |
+| Account editor | F-002 | Name and opening balance; a balance-correction section comparing a user-entered **final** balance with the derived balance, offering `Log income`/`Log expense` with `Difference` + `Modified balance`, or adjusting the opening balance by the difference so the derived final balance matches the entry, with a no-ledger-entry notice; edit and delete actions. | `Reference` fields (guide: name and amount); `Proposed` layout (D-020) |
+| Category list | F-003 | Separate income and expense category lists. New profiles show the ten seeded categories from D-006/D-020: expense — Food, Transport, Wants, Rent, Bills, Necessities, Difference; income — Salary, Bonus, Difference. | `Reference` concept; `Proposed` layout |
 | Category editor | F-003 | Name and type; edit and delete actions. | `Proposed` |
 | Settings | F-001, F-006, F-023 | Nickname editor (required), currency selector including PHP, and light/dark theme choice (default light). | `Decided` behavior (D-003, D-005, D-016, D-017); `Proposed` layout |
 
@@ -76,6 +76,7 @@ The reference app's "continue" button for consecutive entries and its daily memo
 | Async states | Loading, empty, and error states for every data list; empty states invite the first create action. | `Proposed` |
 | Auth states | Unauthenticated users are routed to sign-in; expired sessions prompt sign-in again without discarding unsaved input silently. | `Proposed` alongside `Decided` D-002 |
 | Date/time input | The record editor uses a local `datetime-local` input for all three types, defaulting to the current local time; no timezone conversion is applied. Grouping/ordering use the user's local calendar day from that timestamp. | `Decided` (amended D-009) |
+| Balance correction | In the account editor, entering a desired final balance that differs from the derived balance reveals two explicit choices: log the difference as an income/expense `Difference` record with note `Modified balance`, or adjust the opening balance **by the difference** so the derived final balance matches the entered value, with a clear no-ledger-entry notice. The entered value is never written directly to `initial_amount`. There is no silent correction. | `Decided` (D-020) |
 | Record grouping/ordering | Chronological ordering by `occurred_at`, newest first; the unified history is grouped by local calendar day using a day-summary row, not a heading. | `Proposed`, `Decided` (D-019) |
 | Record display | Expense/income: the account appears as secondary text under the note, with the payee when provided. Transfer: Category is `Transfer`, the account line is `source → destination`, the amount stays `−amount`, and the optional fee is secondary under the amount. Notes remain the primary note text; record time is not shown in the history. Record rows use a uniform fixed height with truncated note/account text. Rows are clickable/focusable and open the record editor; deletion stays inside that editor. | `Decided` (D-019) |
 | Theme preference | Manual light/dark choice in Settings; default light; persisted in profile and applied before first paint. | `Decided` (D-005, F-023) |

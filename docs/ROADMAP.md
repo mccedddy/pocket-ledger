@@ -1,7 +1,7 @@
 # Pocket Ledger — Roadmap
 
 > Last updated: 2026-11-25
-> Status: **D-019 approved; Phase 2 unified-ledger redesign applied and verified.** D-019 supersedes D-018's separate transfers table: all three types use one record screen and one headerless, day-grouped history. Migration `0005_unified_transactions.sql` is applied and live-verified.
+> Status: **D-019 verified; D-020 approved; Phase 2 balance correction authored.** D-019 supersedes D-018's separate transfers table; D-020 adds explicit account balance correction. Migration `0005_unified_transactions.sql` is applied and live-verified; `0006_balance_correction.sql` is authored and awaits application.
 
 ## 1. How to use this roadmap
 
@@ -62,24 +62,25 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 
 ## 5. Phase 2 — Core ledger (baseline completion)
 
-**Scope:** F-002 accounts, F-003 categories, F-004 income/expense/transfer records, F-005 unified transaction history, plus editable local record time. F-008 is folded into F-004/F-005 (**D-019**).
+**Scope:** F-002 accounts with balance correction, F-003 categories, F-004 income/expense/transfer records, F-005 unified transaction history, plus editable local record time. F-008 is folded into F-004/F-005 (**D-019**); balance correction is **D-020**.
 
 **Entry gates:** Phase 1 exit criteria were satisfied, including two-user RLS verification; the D-006 seed migration was verified during Phase 2; visual design follows D-005 and needed no further decision. Photos are out of scope per **D-014**. The extension first amended **D-001**/**D-009** with **D-018** (separate transfers table), then the owner approved **D-019**, which supersedes that design with a unified ledger.
 
 **Work items:**
 
 1. Add migrations for `accounts`, `categories`, `transactions`, indexes, and RLS (per [DATABASE.md](./DATABASE.md)).
-2. Build account list/create/edit/delete screens with derived balances per **D-011**.
+2. Build account list/create/edit/delete screens with derived balances per **D-011**, plus balance correction per **D-020**.
 3. Build income/expense category list/create/edit/delete screens with type consistency.
 4. Build one record editor for Expense, Income, and Transfer with type-specific fields (F-004, D-019).
 5. Build headerless chronological transaction history grouped by local day with signed day totals and empty/loading/error states (F-005, D-019).
 6. Add tests for domain helpers, three-type form validation, unified table rendering, and RLS isolation.
 7. *(Extension)* Replace `transactions.occurred_on` with editable local `occurred_at`; default to current local time.
 8. *(Extension, superseded)* D-018 added a separate transfers table; D-019 replaces it with transfer rows in `transactions`, migrates existing rows, and removes the separate table/routes.
+9. *(D-020)* Add `Difference` seed categories and build the account-editor correction flow with logged and opening-balance paths.
 
 **Implementation notes (Phase 2):** `supabase/migrations/0003_core_ledger.sql` adds the three baseline tables, composite foreign keys, indexes, `for all` RLS policies, `updated_at` triggers, and `public.seed_categories(uuid)` used by both the signup trigger and a one-time backfill for Phase 1 profiles. Balances are derived client-side in `domain/balance.ts` from the cached transactions, so no balance column or SQL view exists. New modules: `features/accounts/`, `features/categories/`, a real `features/transactions/`, plus `domain/date.ts`, `domain/money.ts`, `domain/balance.ts` and per-table repositories/hooks. Deletes use confirmation plus database `on delete restrict`; category type is fixed on edit. Typecheck, lint, 35 tests, and the production build pass. Live verification with two test users passed 20 checks covering seeds, RLS, type enforcement, chronology, balances, edits, deletes, and restrict behavior; a production-build browser smoke test covered create account → create record → history → balance update.
 
-**Extension implementation notes:** `supabase/migrations/0004_transaction_time_and_transfers.sql` renamed `transactions.occurred_on` to `occurred_at timestamp` and added the `transfers` table with composite ownership FKs, restrict deletes, indexes, `updated_at` trigger, and `for all` RLS. `domain/date.ts` gained local datetime helpers and `domain/balance.ts` transfer deltas including fees. D-019 now moves that behavior into the unified `transactions` table, removes `features/transfers/` and `/transfers` routes, and adds `supabase/migrations/0005_unified_transactions.sql`.
+**Extension implementation notes:** `supabase/migrations/0004_transaction_time_and_transfers.sql` renamed `transactions.occurred_on` to `occurred_at timestamp` and added the `transfers` table with composite ownership FKs, restrict deletes, indexes, `updated_at` trigger, and `for all` RLS. `domain/date.ts` gained local datetime helpers and `domain/balance.ts` transfer deltas including fees. D-019 now moves that behavior into the unified `transactions` table, removes `features/transfers/` and `/transfers` routes, and adds `supabase/migrations/0005_unified_transactions.sql`. D-020 adds `supabase/migrations/0006_balance_correction.sql` for `Difference` seed categories and implements the correction UI in the account editor; no new balance column is stored.
 
 **Exit criteria:**
 
@@ -90,6 +91,7 @@ A phase may start only when its entry gates are satisfied. Completing a phase re
 - No remaining deferred feature (search, filters, bookmarks, budgets, stats, recurring, cards) has been implemented, and no photo/receipt UI or storage exists (**D-014**). *(Confirmed in code review.)*
 - *(Extension criterion, verified)* A record's local date/time is editable and defaults to the current local time.
 - *(D-019 criteria, live verified)* Transfers require two distinct own accounts; all three types appear in one headerless, day-grouped history with signed totals and no source/destination columns; source balance includes the optional fee; the old `transfers` table is retired and its rows are preserved.
+- *(D-020 criteria, pending migration)* A desired final balance can be logged as an income/expense `Difference` row with note `Modified balance`, or applied by adjusting `initial_amount` by the difference with a no-ledger-entry notice; the entered final balance is not stored as the opening balance, and `Difference` categories are seeded for new and existing profiles.
 
 ## 6. Phase 3 — Transaction usability (deferred)
 

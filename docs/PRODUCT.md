@@ -1,7 +1,7 @@
 # Pocket Ledger — Product Definition
 
 > Last updated: 2026-11-24
-> Status: **D-019 approved; migration `0005_unified_transactions.sql` applied and verified.** The owner replaced the separate transfers table with one `transactions` table containing Expense, Income, and Transfer rows. The record screen switches fields by type; the history is grouped by local day with signed day totals and headerless record rows. The migrated transfer row was verified live, the former `transfers` table is gone, and the production build was smoke-tested in the browser.
+> Status: **D-019 verified; D-020 approved; migration `0006_balance_correction.sql` authored and awaiting application.** The unified ledger is live; account screens now expose balance correction with an optional logged `Difference` record. The migrated transfer row was verified live, the former `transfers` table is gone, and the production build was smoke-tested in the browser.
 
 ## 1. Purpose of this document
 
@@ -98,8 +98,8 @@ Important differences to keep in mind:
 Included in the baseline:
 
 - Supabase email/password authentication with a required nickname at registration, plus per-user data ownership (foundation prerequisite, **D-002**, **D-015**, **D-016**).
-- Accounts: create, edit, delete, list, with balance display.
-- Categories: income/expense categories; create, edit, delete, list. New profiles are seeded with six expense categories and two income categories (**D-006**); no accounts are seeded.
+- Accounts: create, edit, delete, list, with balance display and explicit balance correction (**D-020**).
+- Categories: income/expense categories; create, edit, delete, list. New profiles are seeded with seven expense categories and three income categories (**D-006**, amended by **D-020**); no accounts are seeded.
 - A single transaction ledger with three types — Expense, Income, and Transfer — created/edited/deleted from one record screen and reviewed in one history table. Every row has an editable local date and time, defaulting to the current local time (**D-009**). Transfers move funds between the user's own accounts; the optional fee is subtracted from the source account (**D-019**).
 - Single configurable currency setting; PHP is supported and USD remains the default (**D-003**, **D-017**).
 - Manual theme setting (light/dark, default light) using the Pocket Ledger design system (**D-005**).
@@ -120,7 +120,7 @@ Excluded from the baseline (tracked as deferred features in [FEATURES.md](./FEAT
 | D-003 | Currency | One configurable currency per user profile; locale formatting; no conversion. | DATABASE, UI, FEATURES |
 | D-004 | PWA scope | Installable only (manifest, icons, minimal service-worker handling for installability). No offline data strategy. | ARCHITECTURE, UI, ROADMAP |
 | D-005 | Visual design | Pocket Ledger's own design system: provisional rose-accented palette, Inter, Tailwind CSS v4 tokens, manual light/dark theme with light default. Replaces the earlier open question Q-004; not a copy of the reference app's style. | UI, ARCHITECTURE, DATABASE, FEATURES |
-| D-006 | Seed data | New profiles get six expense categories — Food, Transport, Wants, Rent, Bills, Necessities — and two income categories — Salary, Bonus. No accounts are seeded. Closes Q-003 and Q-011. | DATABASE, FEATURES, UI, ROADMAP |
+| D-006 | Seed data | Amended by D-020: new profiles get seven expense categories — Food, Transport, Wants, Rent, Bills, Necessities, Difference — and three income categories — Salary, Bonus, Difference. No accounts are seeded. Closes Q-003 and Q-011. | DATABASE, FEATURES, UI, ROADMAP |
 | D-007 | Supabase project | A Supabase project already exists, named `pocket-ledger`, in region `ap-northeast-2`. Vercel project does not exist yet; deployment setup is deferred. | ARCHITECTURE, DATABASE, ROADMAP |
 | D-008 | Money storage | `numeric(14,2)` for amounts; formatting and rounding live in `domain/`. Closes Q-001. | DATABASE, ARCHITECTURE |
 | D-009 | Dates and timezone | Amended: store `occurred_at timestamp` (local wall-clock date and time, no timezone shift); editable in the UI with current local date/time as default. Local calendar boundaries still apply. Closes Q-002. | DATABASE, UI, ROADMAP |
@@ -134,6 +134,7 @@ Excluded from the baseline (tracked as deferred features in [FEATURES.md](./FEAT
 | D-017 | Currency list | `PHP` (Philippine peso) is a supported display currency; `USD` remains the default. No currency conversion is added. | FEATURES, UI, ARCHITECTURE, DATABASE, ROADMAP, README |
 | D-018 | Transfers *(superseded by D-019)* | Initially approved a separate `transfers` table with optional fee. Retired by the owner's unified-ledger decision; the balance rule (fee as source expense) is retained. | FEATURES, DATABASE, UI, ROADMAP, ARCHITECTURE |
 | D-019 | Unified transaction ledger | One `transactions` table holds Expense, Income, and Transfer rows. The source account is `account_id`; transfers also require `to_account_id`, and the two must differ. `category_id` applies only to income/expense; `fee_amount` applies only to transfers and is subtracted from the source. The record screen switches fields by type. The history is grouped by local day with a summary row of signed income/expense totals (no labels) and headerless, fixed-height record rows showing category, note, account, and amount; transfer rows show Category `Transfer`, `source → destination` as the account line, and keep the fee under the amount. Record time is editable on the record screen but is not displayed in the history. Rows open the editor on click or keyboard activation; there are no table action buttons, and deletion stays in the editor. Supersedes D-018. | FEATURES, DATABASE, UI, ROADMAP, ARCHITECTURE, README |
+| D-020 | Account balance correction | The account editor offers a correction against the derived balance. The user enters the desired **final** balance; a positive difference can be logged as income and a negative difference as expense. Logged rows use the type-specific `Difference` category, note/remarks `Modified balance`, and leave `initial_amount` untouched. The user may instead adjust `initial_amount` by that difference so the derived final balance matches the entered value, with clear notice that no ledger record is created. Amends D-006 seeds and requires `0006_balance_correction.sql`. | PRODUCT, FEATURES, UI, DATABASE, ROADMAP, ARCHITECTURE, README |
 
 ### Open questions and deferred context
 
@@ -144,8 +145,8 @@ Excluded from the baseline (tracked as deferred features in [FEATURES.md](./FEAT
 **Resolved / partially resolved:**
 
 - Q-004 (visual direction) is closed by **D-005**. The design is Pocket Ledger's own, not a reproduction of the reference app's style. The palette is provisional ("rose for now") and can be retuned by updating tokens without changing component structure.
-- Q-003 (seed data) is closed by **D-006**: six expense categories, two income categories, no accounts.
-- Q-011 (income-category seeding) is closed by **D-006**: Salary and Bonus.
+- Q-003 (seed data) is closed by **D-006** as amended by **D-020**: seven expense categories, three income categories, no accounts.
+- Q-011 (income-category seeding) is closed by **D-006** as amended by **D-020**: Salary, Bonus, and Difference.
 - Q-006 (project details) is partially closed by **D-007**: Supabase project is `pocket-ledger` in region `ap-northeast-2`. Only Vercel project/environment details remain, deferred because Vercel is not set up yet.
 - Q-001, Q-002, Q-007, Q-008, Q-009, and Q-010 are closed by **D-008–D-013**. Q-002 was later amended by **D-009** to store editable local date/time instead of a date only.
 - Transfers were originally deferred per **D-001**; **D-018** added them as a separate table, then **D-019** superseded that design with a single three-type transaction ledger. F-008 is folded into F-004/F-005 and remains baseline scope.

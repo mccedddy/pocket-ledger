@@ -1,7 +1,7 @@
 # Pocket Ledger — Feature Inventory
 
 > Last updated: 2026-11-24
-> Status: **D-019 approved; migration `0005_unified_transactions.sql` applied and verified.** F-004 covers Expense, Income, and Transfer in one record screen; F-005 shows all three types in one headerless, day-grouped history with signed day totals. F-008's separate-table design is superseded. The refined layout was smoke-tested in the production build.
+> Status: **D-019 verified; D-020 approved; migration `0006_balance_correction.sql` authored and awaiting application.** F-004 covers Expense, Income, and Transfer in one record screen; F-005 shows all three types in one headerless, day-grouped history with signed day totals. F-002 now includes account balance correction with an optional logged `Difference` record.
 
 ## 1. Scope
 
@@ -31,22 +31,25 @@ Status labels are defined in [PRODUCT.md](./PRODUCT.md) §2. IDs are stable and 
 - **Baseline behavior:**
   - A user can add an account with a name and an initial amount.
   - A user can edit and delete accounts and view the account list with derived balances.
+  - The account editor can correct a balance against the derived value. The user enters the desired **final** balance; positive differences can be logged as income and negative differences as expense. Logged rows use the type-specific `Difference` category with note `Modified balance` and do not change `initial_amount` (**D-020**). Alternatively, the user can adjust `initial_amount` by the same difference so the derived final balance equals the entered value, with a clear notice that no ledger record is created.
   - Groups, hiding, reordering, and exclusion from totals belong to F-019 and are **not** in the baseline.
 - **Acceptance criteria (reference-derived):**
   - An account cannot be saved without a name and an amount, matching the guide's requirement to insert name and amount.
   - Account changes are visible in the account list.
-- **Decisions applied:** D-010 (hard delete with restrict), D-011 (opening balance rule), D-006 (no seeded accounts).
+  - A logged correction creates one income/expense row with `Difference`, `Modified balance`, and the corrected amount; the derived balance then matches the entered actual balance.
+  - An opening-balance adjustment sets `initial_amount` to the current opening balance plus the difference, so the derived final balance equals the entered final balance, and creates no transaction.
+- **Decisions applied:** D-010 (hard delete with restrict), D-011 (opening balance rule), D-006 (no seeded accounts), D-020 (balance correction).
 - **Open questions:** None.
 
 ### F-003 — Income and expense categories
 
 - **Status:** `Reference` + baseline subset of the category topic.
 - **Reference:** [How to enable sub-category](https://help.realbyteapps.com/hc/en-us/articles/360015963374-How-to-enable-sub-category).
-- **Baseline behavior:** A user can create, edit, delete, and list categories classified as income or expense. Categories are flat in the baseline; subcategories are deferred to F-020. Per **D-006**, new profiles are seeded with six expense categories — Food, Transport, Wants, Rent, Bills, Necessities — and two income categories — Salary, Bonus. No accounts are seeded.
+- **Baseline behavior:** A user can create, edit, delete, and list categories classified as income or expense. Categories are flat in the baseline; subcategories are deferred to F-020. Per **D-006** as amended by **D-020**, new profiles are seeded with seven expense categories — Food, Transport, Wants, Rent, Bills, Necessities, Difference — and three income categories — Salary, Bonus, Difference. No accounts are seeded.
 - **Acceptance criteria:**
   - A category has a name and a type (`income` or `expense`), matching the guide's separate income/expense category management.
   - Income records can only use income categories; expense records can only use expense categories (integrity rule derived from the guide's separate category types).
-  - A newly created profile contains exactly the eight seeded categories from D-006 and no seeded accounts.
+  - A newly created profile contains exactly the ten seeded categories from D-006/D-020 and no seeded accounts.
 - **Decisions applied:** D-010 (hard delete; cannot delete a category still used by records).
 - **Open questions:** None.
 

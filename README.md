@@ -2,7 +2,7 @@
 
 A responsive, installable personal finance web app built with React, TypeScript, Vite, Tailwind CSS v4, and Supabase.
 
-> Current phase: **Phase 2 — D-019 unified ledger redesign applied and verified**. One record screen creates Expense, Income, and Transfer rows; one headerless, day-grouped history shows signed totals and compact records. Migration `0005_unified_transactions.sql` is applied and live-verified; migrations `0001`–`0004` were verified live with two Supabase users.
+> Current phase: **Phase 2 — D-019 verified, D-020 balance correction authored**. One record screen creates Expense, Income, and Transfer rows; one headerless, day-grouped history shows signed totals and compact records. Account correction can log a `Difference` record or adjust the opening balance by the difference to match the entered final balance. Migration `0005_unified_transactions.sql` is applied and live-verified; `0006_balance_correction.sql` is authored and awaits application.
 
 ## Prerequisites
 

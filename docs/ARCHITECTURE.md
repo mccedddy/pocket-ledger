@@ -1,7 +1,7 @@
 # Pocket Ledger — Architecture
 
 > Last updated: 2026-11-25
-> Status: **D-019 approved; migration `0005_unified_transactions.sql` applied and verified.** One `transactions` table holds Expense, Income, and Transfer rows; the record screen switches fields by type and the history is headerless, grouped by local day with signed totals. The production build was smoke-tested in the browser.
+> Status: **D-019 verified; D-020 approved; migration `0006_balance_correction.sql` authored and awaiting application.** One `transactions` table holds Expense, Income, and Transfer rows; the record screen switches fields by type and the history is headerless, grouped by local day with signed totals. Account balance correction can log a `Difference` record or adjust the opening balance explicitly.
 
 ## 1. Purpose and current state
 
@@ -32,6 +32,7 @@ All statements are marked using the labels in [PRODUCT.md](./PRODUCT.md) §2.
 | Nickname | Required 1–30 characters at registration, editable in Settings, stored on `profiles` | **D-016** |
 | Currency list | `PHP` supported; `USD` remains default; no conversion | **D-017** |
 | Ledger | One table for Expense, Income, and Transfer; no separate transfer module or route | **D-019** |
+| Balance correction | Account editor compares an entered final balance with the derived balance; logs a `Difference` income/expense or adjusts opening balance by the difference | **D-020** |
 
 ## 3. Proposed system context
 
@@ -147,7 +148,7 @@ Per **D-007**, the Supabase project exists, is named `pocket-ledger`, and is hos
 Vitest and Testing Library are installed. Current coverage (48 tests passing):
 
 - **Unit tests** for `domain/currency.ts`, `domain/validation.ts`, `domain/money.ts`, `domain/date.ts`, and `domain/balance.ts`, covering all three transaction types.
-- **Component tests** for the shared `Button` (`src/shared/Button.test.tsx`), the sign-in/sign-up forms (`src/features/auth/authPages.test.tsx`), Settings nickname editing (`src/features/settings/SettingsPage.test.tsx`), AppShell sign-out (`src/app/AppShell.test.tsx`), the Accounts list empty/error/balance states (`src/features/accounts/AccountsPage.test.tsx`), the unified record form with dynamic fields and mutation arguments for Expense/Income/Transfer (`src/features/transactions/TransactionFormPage.test.tsx`), and the headerless unified history with day totals, row anatomy, transfer arrows, local-day grouping, and row navigation to the editor (`src/features/transactions/TransactionsPage.test.tsx`).
+- **Component tests** for the shared `Button` (`src/shared/Button.test.tsx`), the sign-in/sign-up forms (`src/features/auth/authPages.test.tsx`), Settings nickname editing (`src/features/settings/SettingsPage.test.tsx`), AppShell sign-out (`src/app/AppShell.test.tsx`), the Accounts list empty/error/balance states (`src/features/accounts/AccountsPage.test.tsx`), account balance correction with logged and opening-balance paths (`src/features/accounts/AccountFormPage.test.tsx`), the unified record form with dynamic fields and mutation arguments for Expense/Income/Transfer (`src/features/transactions/TransactionFormPage.test.tsx`), and the headerless unified history with day totals, row anatomy, transfer arrows, local-day grouping, and row navigation to the editor (`src/features/transactions/TransactionsPage.test.tsx`).
 
 Verification status:
 
@@ -156,6 +157,7 @@ Verification status:
 - Live Phase 2 verification (completed): D-006 seeds for both users, category-type enforcement, derived balance D-011, chronology, restrict deletes, and a production-build browser smoke test of create account → create record → history → balance update.
 - Extension verification (completed after `0004`): editable local date/time, transfer CRUD, `transfers` RLS, fee-as-expense balance math, distinct-account/amount/fee constraints, and restrict deletes. 19 live API checks passed.
 - D-019 verification (completed): live REST checks confirmed the migrated transfer row in `transactions` with its amount and fee, and that `transfers` is retired (404); the probe data was removed. A production-build browser smoke test confirmed headerless day totals, row anatomy, the transfer arrow, and fee placement. Subsequent UI refinement set transfer Category to `Transfer`, removed record time from the history, replaced table action buttons with clickable/focusable rows that open the editor, and fixed record-row height with truncated note/account text; deletion remains in the editor. Three-type form behavior remains covered by component tests.
+- D-020 verification (pending migration): component tests cover both correction paths, including that the opening-balance path adds the difference to the existing `initial_amount` rather than storing the entered final balance; migration `0006_balance_correction.sql` is authored locally and must be applied by the owner before live seed-category checks.
 
 ## 11. Deferred architecture concerns
 
